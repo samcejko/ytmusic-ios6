@@ -71,19 +71,40 @@ static NSArray *TNParseLRC(NSString *lrc)
     return lines;
 }
 
-+ (NSArray *)lrclibSearch:(NSString *)title artist:(NSString *)artist
+// One LRCLIB call; a busy server (429, 503) is asked again once after a moment. *failed: no answer at all.
++ (id)lrclibGet:(NSString *)url failed:(BOOL *)failed
 {
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt) [NSThread sleepForTimeInterval:2.5];
+        TNHTTPRequest *r = [[TNHTTPRequest alloc] initWithMethod:@"GET" URL:[NSURL URLWithString:url]];
+        r.headers = @{ @"Accept": @"application/json", @"User-Agent": @"Muzika 0.1 (iOS 6 music app; https://github.com/samcejko)" };
+        r.connectTimeout = 15;
+        r.readTimeout = 20;
+        r.verifyTLS = [TNSettings verifyTLS];
+        __block NSError *failure = nil;
+        r.onComplete = ^(NSError *e) { failure = e; };
+        [r runSynchronously];
+        if (!failure && r.statusCode == 200) return [TNUtils JSONObjectFromData:r.responseBody];
+        if (!failure && r.statusCode == 404) return nil;
+        TNLog(@"lrclib: %@", failure ? failure.localizedDescription : [NSString stringWithFormat:@"HTTP %ld", (long)r.statusCode]);
+        if (!failure && r.statusCode != 429 && r.statusCode < 500) break;
+    }
+    if (failed) *failed = YES;
+    return nil;
+}
+
+// The exact song first (LRCLIB's cached "get" by title, artist and length), else a search
++ (NSArray *)lrclibSearch:(NSString *)title artist:(NSString *)artist durationMs:(NSInteger)ms failed:(BOOL *)failed
+{
+    if (ms > 0) {
+        NSString *get = [NSString stringWithFormat:@"https://lrclib.net/api/get?track_name=%@&artist_name=%@&duration=%ld",
+                         [TNUtils urlEncode:title], [TNUtils urlEncode:artist], (long)lround(ms / 1000.0)];
+        NSDictionary *exact = TNDict([self lrclibGet:get failed:failed]);
+        if (TNStr(exact[@"syncedLyrics"]).length) return @[ exact ];
+        if (failed && *failed) return nil;
+    }
     NSString *url = [NSString stringWithFormat:@"https://lrclib.net/api/search?track_name=%@&artist_name=%@", [TNUtils urlEncode:title], [TNUtils urlEncode:artist]];
-    TNHTTPRequest *r = [[TNHTTPRequest alloc] initWithMethod:@"GET" URL:[NSURL URLWithString:url]];
-    r.headers = @{ @"Accept": @"application/json", @"User-Agent": @"Muzika 0.1 (iOS 6 music app; https://github.com/samcejko)" };
-    r.connectTimeout = 15;
-    r.readTimeout = 20;
-    r.verifyTLS = [TNSettings verifyTLS];
-    __block NSError *failure = nil;
-    r.onComplete = ^(NSError *e) { failure = e; };
-    [r runSynchronously];
-    if (failure || r.statusCode != 200) return nil;
-    return TNArr([TNUtils JSONObjectFromData:r.responseBody]);
+    return TNArr([self lrclibGet:url failed:failed]);
 }
 
 + (TNHTTPTask *)lyricsFor:(TNTrack *)track videoId:(NSString *)videoId durationMs:(NSInteger)durationMs
@@ -102,7 +123,8 @@ static NSArray *TNParseLRC(NSString *lrc)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         TNLyricsResult *result = nil;
         // 1. LRCLIB, the version whose length fits (within 3 s) with lines in time
-        NSArray *found = title.length ? [self lrclibSearch:title artist:artist] : nil;
+        BOOL lrclibFailed = NO;
+        NSArray *found = title.length ? [self lrclibSearch:title artist:artist durationMs:ms failed:&lrclibFailed] : nil;
         NSDictionary *best = nil, *plain = nil;
         for (id x in found ?: @[]) {
             NSDictionary *d = TNDict(x);
@@ -140,7 +162,10 @@ static NSArray *TNParseLRC(NSString *lrc)
                 result.source = [source stringByReplacingOccurrencesOfString:@"Source: " withString:@""];
             }
         }
-        if (result) @synchronized (TNLyricsCache()) { TNLyricsCache()[key] = result; }
+        // (YouTube's plain text in place of LRCLIB that did not answer is not kept: next time LRCLIB is asked again)
+        if (result && (result.synced || !lrclibFailed)) {
+            @synchronized (TNLyricsCache()) { TNLyricsCache()[key] = result; }
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             if (task.isCancelled) return;
             completion(result, result ? nil : TNMakeError(TNErrorAPI, L(@"No lyrics for this song.")));

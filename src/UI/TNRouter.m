@@ -27,6 +27,20 @@
 
 @implementation TNActionSheet
 
+static __weak TNActionSheet *TNShownSheet;
+
++ (BOOL)pressButtonTitled:(NSString *)title
+{
+    TNActionSheet *s = TNShownSheet;
+    if (!s.sheet.visible) return NO;
+    for (NSInteger i = 0; i < s.sheet.numberOfButtons; i++) {
+        if (![[s.sheet buttonTitleAtIndex:i] isEqualToString:title]) continue;
+        [s.sheet dismissWithClickedButtonIndex:i animated:NO];
+        return YES;
+    }
+    return NO;
+}
+
 - (instancetype)initWithTitle:(NSString *)title
 {
     if ((self = [super init])) {
@@ -54,6 +68,7 @@
     self.sheet.cancelButtonIndex = [self.sheet addButtonWithTitle:L(@"Cancel")];
     [self.actions addObject:[NSNull null]];
     self.keepAlive = self;
+    TNShownSheet = self;
     if (TNIsPad() && view.window) [self.sheet showFromRect:view.bounds inView:view animated:YES];
     else [self.sheet showInView:controller.view.window ?: controller.view];
 }

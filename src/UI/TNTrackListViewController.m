@@ -164,7 +164,8 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
         self.reloadScheduled = NO;
         [[TNMatcher shared] applyTo:self.tracks];
         if (self.view.window) [self.tableView reloadData];
-        [self showMatchState];
+        if (self.kind == TNListOwn && !self.playlist.thumbnails.count) [self showHeader];   // (the cover of the first song found)
+        else [self showMatchState];
     });
 }
 
@@ -225,7 +226,13 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     switch (self.kind) {
         case TNListAlbum: return [self.album imageURLForSize:400];
         case TNListPlaylist:
-        case TNListApple: return [self.playlist imageURLForSize:400] ?: [(TNTrack *)self.tracks.firstObject imageURLForSize:400];
+        case TNListApple:
+        case TNListOwn: {
+            NSString *own = [self.playlist imageURLForSize:400];
+            if (own) return own;
+            for (TNTrack *t in self.tracks) { NSString *u = [t imageURLForSize:400]; if (u) return u; }   // (songs still being looked up have none)
+            return nil;
+        }
         default: return [(TNTrack *)self.tracks.firstObject imageURLForSize:400];
     }
 }

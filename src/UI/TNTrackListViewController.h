@@ -14,4 +14,6 @@
 - (instancetype)initDownloads;
 - (instancetype)initWithTracks:(NSArray *)tracks title:(NSString *)title contextURI:(NSString *)uri;
 
+- (void)listActions;              // the list's "…" menu
+
 @end

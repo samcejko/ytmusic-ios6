@@ -130,10 +130,18 @@ static TNTrack *TNTrackFromSpotify(NSDictionary *d)
             return;
         }
         NSMutableArray *thumbs = [NSMutableArray array];
-        NSArray *sources = TNArr(TNDict(entity[@"coverArt"])[@"sources"]) ?: TNArr(TNDict(entity[@"visualIdentity"])[@"image"]) ?: @[];
-        for (id x in sources) {
+        // the cover in its sizes ({url, maxWidth}), else the one of coverArt (no size given)
+        for (id x in TNArr(TNDict(entity[@"visualIdentity"])[@"image"]) ?: @[]) {
             NSDictionary *d = TNDict(x);
-            if (TNStr(d[@"url"]).length) [thumbs addObject:@{ @"url": d[@"url"], @"width": d[@"width"] ?: @300, @"height": d[@"height"] ?: @300 }];
+            NSInteger w = TNInt(d[@"maxWidth"]) ?: 300;
+            if (TNStr(d[@"url"]).length) [thumbs addObject:@{ @"url": d[@"url"], @"width": @(w), @"height": @(TNInt(d[@"maxHeight"]) ?: w) }];
+        }
+        if (!thumbs.count) {
+            for (id x in TNArr(TNDict(entity[@"coverArt"])[@"sources"]) ?: @[]) {
+                NSDictionary *d = TNDict(x);
+                NSInteger w = TNInt(d[@"width"]) ?: 300;
+                if (TNStr(d[@"url"]).length) [thumbs addObject:@{ @"url": d[@"url"], @"width": @(w), @"height": @(TNInt(d[@"height"]) ?: w) }];
+            }
         }
         TNPlaylist *p = [[TNLibrary shared] createPlaylistNamed:TNStr(entity[@"name"]) ?: TNStr(entity[@"title"]) ?: L(@"Spotify playlist") tracks:tracks];
         p.author = [NSString stringWithFormat:L(@"From Spotify%@"), TNStr(entity[@"subtitle"]).length ? [@" • " stringByAppendingString:entity[@"subtitle"]] : @""];

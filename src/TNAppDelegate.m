@@ -3,6 +3,7 @@
 #import "TNExternalOpen.h"
 #import "TNSearchViewController.h"
 #import "TNNowPlayingViewController.h"
+#import "TNTrackListViewController.h"
 #import "TNRouter.h"
 #import "TNYTMusic.h"
 #import "TNAppleMusic.h"
@@ -119,7 +120,9 @@ static BOOL TNPressView(UIView *v, NSString *text)
 
 #pragma mark - Links
 
-// muzika:open?url=<music.youtube.com / youtube.com / music.apple.com link>, muzika:search?q=, and plain links.
+// muzika:open?url=<music.youtube.com / youtube.com / music.apple.com / open.spotify.com link>, muzika:import?url=
+// (a playlist link into the library), muzika:search?q=, and plain links. Also: sheet?title= (a button of the menu on
+// screen), more (the menu of the song playing; more?list=1: of the list on screen).
 // Debug commands (need Documents/debug): stats, screen, snapshot, press?title=/n=, back, lang?set=en|cs|system,
 // section?name=, play?v=, player?cmd=pause|play|next|prev|seek&ms=|shuffle|repeat, nowplaying?panel=art|lyrics|queue,
 // sync, ytm?ep=browse&id=&params= (the answer saved to tmp/ytm.json), rotate?o=landscape|portrait
@@ -137,6 +140,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
     if (q.location != NSNotFound) { query = [target substringFromIndex:q.location + 1]; target = [target substringToIndex:q.location]; }
     NSDictionary *params = query.length ? [TNUtils parseQuery:query] : @{};
     if ([target isEqualToString:@"open"] && [params[@"url"] length]) { [TNRouter openURL:params[@"url"]]; return YES; }
+    if ([target isEqualToString:@"import"] && [params[@"url"] length]) { [TNRouter importLink:params[@"url"]]; return YES; }
     if ([target isEqualToString:@"search"]) {
         [root showSection:TNSectionSearch];
         UIViewController *search = root.contentNavigationController.viewControllers.firstObject;
@@ -214,6 +218,17 @@ static BOOL TNPressView(UIView *v, NSString *text)
             UIGraphicsEndImageContext();
         }
         TNLog(@"%@ %@: %@", target, ok ? @"written" : @"failed", path);
+        return YES;
+    }
+    if ([target isEqualToString:@"sheet"]) {
+        TNLog(@"Sheet %@: %@", params[@"title"], [TNActionSheet pressButtonTitled:params[@"title"] ?: @""] ? @"done" : @"nothing found");
+        return YES;
+    }
+    if ([target isEqualToString:@"more"]) {
+        // the "…" of the song playing, or of the list on screen (the menu then works with sheet?title=)
+        UIViewController *t = [root topController];
+        if ([params[@"list"] length] && [t isKindOfClass:[TNTrackListViewController class]]) [(TNTrackListViewController *)t listActions];
+        else if ([TNPlayer shared].currentTrack) [TNRouter showActionsForTrack:[TNPlayer shared].currentTrack fromView:t.view inController:t];
         return YES;
     }
     if ([target isEqualToString:@"press"]) {

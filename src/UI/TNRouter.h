@@ -8,6 +8,7 @@
 - (void)addButton:(NSString *)title action:(dispatch_block_t)action;
 - (void)addDestructiveButton:(NSString *)title action:(dispatch_block_t)action;
 - (void)showFromView:(UIView *)view inController:(UIViewController *)controller;
++ (BOOL)pressButtonTitled:(NSString *)title;      // the sheet on screen (debug commands)
 @end
 
 // Going places: album, artist, playlist and browse pages, links, the actions of a song, now playing
