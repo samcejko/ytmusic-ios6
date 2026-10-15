@@ -152,6 +152,22 @@ foreach ($name in $wanted) {
     Expand-Archive -Path $zip -DestinationPath $extract -Force
     $got++
 }
+if ($got -eq 0) {
+    # The account's artifact storage may be full: the workflow also puts the packages on the rolling "ci-build" prerelease
+    Write-Host "No artifacts; taking the packages from the ci-build prerelease"
+    $release = Invoke-GH GET "/releases/tags/ci-build"
+    foreach ($asset in $release.assets) {
+        if ($Arch -eq 'armv7' -and $asset.name -like '*arm64*') { continue }
+        if ($Arch -eq 'arm64' -and $asset.name -notlike '*arm64*') { continue }
+        $dest = Join-Path $extract $asset.name
+        for ($i = 1; $i -le 6; $i++) {
+            & curl.exe -sSL -f -H "Authorization: Bearer $Token" -H "Accept: application/octet-stream" -o $dest "$Api/releases/assets/$($asset.id)"
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds (3 * $i)
+        }
+        if (Test-Path $dest) { $got++ }
+    }
+}
 if ($got -eq 0) { throw "Nothing downloaded" }
 $files = Get-ChildItem $extract -File
 $files | ForEach-Object { Write-Host "Downloaded: $($_.FullName) ($([math]::Round($_.Length/1KB)) KB)" }

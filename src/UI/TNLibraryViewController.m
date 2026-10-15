@@ -5,6 +5,7 @@
 #import "TNModels.h"
 #import "TNLibrary.h"
 #import "TNAppleMusic.h"
+#import "TNImageLoader.h"
 #import "TNSettings.h"
 #import "TNUtils.h"
 #import "TNCommon.h"
