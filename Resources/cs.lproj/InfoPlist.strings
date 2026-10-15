@@ -1,0 +1,3 @@
+/* Muzika - systémové dotazy na oprávnění (iOS 14 a novější). */
+
+"NSLocalNetworkUsageDescription" = "Při připojování Apple Music Muzika ukáže na vaší Wi-Fi stránku, přes kterou pošlete token z počítače.";

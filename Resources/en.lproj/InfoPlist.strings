@@ -1,0 +1,3 @@
+/* Muzika - the system's permission questions (iOS 14 and newer). */
+
+"NSLocalNetworkUsageDescription" = "Muzika shows a page on your Wi-Fi while you connect Apple Music, so that you can send the token from a computer.";

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Muzika: a glossy red record with a white note on a near-black tile, in the iOS 6 manner (the gloss is baked in,
+       UIPrerenderedIcon is on) -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3c3c40"/>
+      <stop offset="1" stop-color="#0b0b0c"/>
+    </linearGradient>
+    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff6a5c"/>
+      <stop offset="0.55" stop-color="#e5261e"/>
+      <stop offset="1" stop-color="#a50f09"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.72" stop-color="#000000" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="note" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1e2e0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#tile)"/>
+  <rect x="0" y="0" width="1024" height="6" fill="#ffffff" fill-opacity="0.25"/>
+  <circle cx="512" cy="560" r="372" fill="url(#shadow)"/>
+  <circle cx="512" cy="522" r="332" fill="url(#disc)" stroke="#6e0805" stroke-width="10"/>
+  <circle cx="512" cy="522" r="292" fill="none" stroke="#000000" stroke-opacity="0.10" stroke-width="5"/>
+  <circle cx="512" cy="522" r="256" fill="none" stroke="#000000" stroke-opacity="0.08" stroke-width="4"/>
+  <circle cx="512" cy="522" r="222" fill="none" stroke="#000000" stroke-opacity="0.06" stroke-width="4"/>
+  <!-- an eighth note: its shadow, then the note -->
+  <g transform="translate(0,10)" fill="#5a0603" fill-opacity="0.5">
+    <ellipse cx="452" cy="642" rx="92" ry="70" transform="rotate(-20 452 642)"/>
+    <rect x="508" y="330" width="40" height="320"/>
+    <path d="M548 330 C620 360 690 420 660 520 C650 470 610 440 548 430 Z"/>
+  </g>
+  <g fill="url(#note)">
+    <ellipse cx="452" cy="642" rx="92" ry="70" transform="rotate(-20 452 642)"/>
+    <rect x="508" y="330" width="40" height="320"/>
+    <path d="M548 330 C620 360 690 420 660 520 C650 470 610 440 548 430 Z"/>
+  </g>
+  <path d="M0 0 H1024 V438 C790 530 234 530 0 438 Z" fill="url(#gloss)"/>
+</svg>

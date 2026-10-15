@@ -1,0 +1,354 @@
+#import "TNSettingsViewController.h"
+#import "TNExternalOpen.h"
+#import "TNRouter.h"
+#import "TNAppleMusic.h"
+#import "TNMatcher.h"
+#import "TNLibrary.h"
+#import "TNSettings.h"
+#import "TNPlayer.h"
+#import "TNImageLoader.h"
+#import "TNUtils.h"
+#import "TNTheme.h"
+#import "TNCommon.h"
+
+// The look of a dark grouped table on iOS 6: the rounded cells on charcoal, headers and footers drawn here
+// (the system's are dark text on white shadow, made for the pinstripes)
+static void TNStyleGroupedCell(UITableViewCell *cell)
+{
+    TNTheme *theme = [TNTheme shared];
+    cell.backgroundColor = [theme panelColor];
+    cell.textLabel.backgroundColor = [UIColor clearColor];
+    cell.textLabel.textColor = [theme primaryTextColor];
+    cell.textLabel.font = [theme boldBodyFont];
+    cell.detailTextLabel.backgroundColor = [UIColor clearColor];
+    cell.detailTextLabel.textColor = [theme secondaryTextColor];
+    cell.detailTextLabel.font = [theme bodyFont];
+    UIView *selected = [[UIView alloc] init];
+    selected.backgroundColor = [theme rowHighlightColor];
+    cell.selectedBackgroundView = selected;
+}
+
+static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloat *height)
+{
+    TNTheme *theme = [TNTheme shared];
+    UIFont *font = header ? [theme boldBodyFont] : [theme smallFont];
+    CGFloat inset = TNIsPad() ? 54 : 20;
+    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(width - inset * 2, 400)];
+    CGFloat h = ceilf(s.height) + (header ? 22 : 16);
+    if (height) *height = h;
+    UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, h)];
+    UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(inset, header ? 14 : 6, width - inset * 2, ceilf(s.height))];
+    l.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    l.text = text;
+    l.font = font;
+    l.numberOfLines = 0;
+    l.textColor = header ? [theme secondaryTextColor] : [theme tertiaryTextColor];
+    l.backgroundColor = [UIColor clearColor];
+    l.shadowColor = [UIColor colorWithWhite:0 alpha:0.7];
+    l.shadowOffset = CGSizeMake(0, -1);
+    [v addSubview:l];
+    return v;
+}
+
+#pragma mark - Licences
+
+@interface TNLicensesViewController : UIViewController
+@end
+
+@implementation TNLicensesViewController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.title = L(@"Open-source software");
+    TNTheme *theme = [TNTheme shared];
+    self.view.backgroundColor = [theme backgroundColor];
+    UITextView *text = [[UITextView alloc] initWithFrame:self.view.bounds];
+    text.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    text.editable = NO;
+    text.backgroundColor = [UIColor clearColor];
+    text.textColor = [theme primaryTextColor];
+    text.font = [theme bodyFont];
+    text.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+    text.text = [NSString stringWithFormat:@"%@\n\n"
+                 "Mbed TLS (Arm Limited and contributors)\nApache License 2.0\n\n"
+                 "yt-dlp (the yt-dlp contributors)\n%@\n\n"
+                 "%@",
+                 L(@"Muzika is built with these, thank you:"),
+                 L(@"The Unlicense: it runs on the audio helper (not in the app) and finds the full-length audio."),
+                 L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple. YouTube Music is a trademark of Google LLC, Apple Music a trademark of Apple Inc.")];
+    [self.view addSubview:text];
+}
+
+@end
+
+#pragma mark - Settings
+
+enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCount };
+
+@interface TNSettingsViewController () <UIAlertViewDelegate>
+@property (nonatomic, copy) NSString *cacheSize;
+@end
+
+@implementation TNSettingsViewController
+
+- (instancetype)init
+{
+    if ((self = [super initWithStyle:UITableViewStyleGrouped])) self.title = L(@"Settings");
+    return self;
+}
+
+- (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.tableView.backgroundView = nil;
+    self.tableView.backgroundColor = [[TNTheme shared] backgroundColor];
+    self.tableView.separatorColor = [[TNTheme shared] separatorColor];
+    self.tableView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc addObserver:self selector:@selector(reload) name:TNSettingsDidChangeNotification object:nil];
+    [nc addObserver:self selector:@selector(reload) name:TNAppleDidChangeNotification object:nil];
+}
+
+- (void)reload { [self.tableView reloadData]; }
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self.tableView reloadData];
+    [[TNImageLoader shared] diskUsage:^(unsigned long long bytes) {
+        self.cacheSize = [TNUtils formatFileSize:bytes];
+        [self.tableView reloadData];
+    }];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return TNSetCount; }
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    switch (section) {
+        case TNSetApple: return [[TNAppleMusic shared] connected] ? 4 : 2;
+        case TNSetPlayback: return 3;
+        case TNSetHelper: return 1;
+        case TNSetStorage: return 3;
+        case TNSetAbout: return 3;
+    }
+    return 0;
+}
+
+- (NSString *)headerFor:(NSInteger)section
+{
+    switch (section) {
+        case TNSetApple: return L(@"Apple Music");
+        case TNSetPlayback: return L(@"Playback");
+        case TNSetHelper: return L(@"Audio helper");
+        case TNSetStorage: return L(@"Storage");
+        case TNSetAbout: return L(@"About");
+    }
+    return nil;
+}
+
+- (NSString *)footerFor:(NSInteger)section
+{
+    switch (section) {
+        case TNSetApple: return L(@"Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu.");
+        case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing.");
+        case TNSetHelper: return L(@"YouTube gives the whole song only to its own apps. The helper (yt-dlp on a Raspberry Pi, the same one Tubie uses) finds the full-length audio. Its addresses work on the helper's own internet connection, so away from home songs may not play.");
+        case TNSetAbout: return L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple.");
+    }
+    return nil;
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
+{
+    NSString *t = [self headerFor:section];
+    return t ? TNGroupedLabel(t, tableView.bounds.size.width, YES, NULL) : nil;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
+{
+    NSString *t = [self headerFor:section];
+    if (!t) return 14;
+    CGFloat h = 0;
+    TNGroupedLabel(t, tableView.bounds.size.width, YES, &h);
+    return h;
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section
+{
+    NSString *t = [self footerFor:section];
+    return t ? TNGroupedLabel(t, tableView.bounds.size.width, NO, NULL) : nil;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section
+{
+    NSString *t = [self footerFor:section];
+    if (!t) return 6;
+    CGFloat h = 0;
+    TNGroupedLabel(t, tableView.bounds.size.width, NO, &h);
+    return h;
+}
+
+- (UISwitch *)switchOn:(BOOL)on action:(SEL)action
+{
+    UISwitch *s = [[UISwitch alloc] init];
+    s.on = on;
+    [s addTarget:self action:action forControlEvents:UIControlEventValueChanged];
+    return s;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
+    TNStyleGroupedCell(cell);
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    NSInteger row = indexPath.row;
+    TNAppleMusic *apple = [TNAppleMusic shared];
+    switch (indexPath.section) {
+        case TNSetApple:
+            if (![apple connected]) {
+                if (row == 0) {
+                    cell.textLabel.text = L(@"Connect Apple Music");
+                    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                    cell.selectionStyle = UITableViewCellSelectionStyleGray;
+                } else {
+                    cell.textLabel.text = L(@"Songs found on YouTube");
+                    cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)[[TNMatcher shared] matchCount]];
+                }
+                break;
+            }
+            if (row == 0) {
+                cell.textLabel.text = L(@"Library");
+                cell.detailTextLabel.text = apple.syncing ? (apple.syncStatus ?: L(@"Syncing…")) :
+                    [NSString stringWithFormat:L(@"%lu playlists"), (unsigned long)[[TNLibrary shared] applePlaylists].count];
+            }
+            if (row == 1) {
+                cell.textLabel.text = L(@"Sync now");
+                NSDate *last = [TNSettings appleLastSync];
+                cell.detailTextLabel.text = last ? [TNUtils formatRelativeDate:last] : @"";
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            if (row == 2) {
+                cell.textLabel.text = L(@"Songs found on YouTube");
+                cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)[[TNMatcher shared] matchCount]];
+            }
+            if (row == 3) {
+                cell.textLabel.text = L(@"Disconnect");
+                cell.textLabel.textAlignment = NSTextAlignmentCenter;
+                cell.textLabel.textColor = [UIColor colorWithRed:1 green:0.42 blue:0.38 alpha:1];
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            break;
+        case TNSetPlayback:
+            if (row == 0) { cell.textLabel.text = L(@"Autoplay"); cell.accessoryView = [self switchOn:[TNSettings autoplay] action:@selector(autoplayChanged:)]; }
+            if (row == 1) { cell.textLabel.text = L(@"Music videos for Apple songs"); cell.accessoryView = [self switchOn:[TNSettings allowVideosForApple] action:@selector(videosChanged:)]; }
+            if (row == 2) { cell.textLabel.text = L(@"Find whole playlists at once"); cell.accessoryView = [self switchOn:[TNSettings matchWholePlaylists] action:@selector(matchAllChanged:)]; }
+            break;
+        case TNSetHelper: {
+            NSString *base = [TNSettings resolverBase];
+            cell.textLabel.text = L(@"Address");
+            cell.detailTextLabel.text = base.length ? [[base stringByReplacingOccurrencesOfString:@"https://" withString:@""] stringByReplacingOccurrencesOfString:@"http://" withString:@""] : L(@"Off");
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+            cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            break;
+        }
+        case TNSetStorage:
+            if (row == 0) {
+                cell.textLabel.text = L(@"Clear image cache");
+                cell.detailTextLabel.text = self.cacheSize ?: @"…";
+            }
+            if (row == 1) cell.textLabel.text = L(@"Clear the played songs");
+            if (row == 2) cell.textLabel.text = L(@"Forget the YouTube matches");
+            cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            break;
+        case TNSetAbout:
+            if (row == 0) { cell.textLabel.text = L(@"Version"); cell.detailTextLabel.text = [TNUtils appVersion]; }
+            if (row == 1) {
+                cell.textLabel.text = L(@"Open-source software");
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            if (row == 2) {
+                cell.textLabel.text = L(@"Support the development");
+                cell.detailTextLabel.text = @"ko-fi.com/samcejko";
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            break;
+    }
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    NSInteger row = indexPath.row;
+    TNAppleMusic *apple = [TNAppleMusic shared];
+    switch (indexPath.section) {
+        case TNSetApple:
+            if (![apple connected]) { if (row == 0) [TNRouter showAppleConnect]; break; }
+            if (row == 1) {
+                [apple syncWithCompletion:^(NSError *error) { [TNRouter toast:error ? error.localizedDescription : L(@"Apple Music synced")]; }];
+                [self.tableView reloadData];
+            }
+            if (row == 3) {
+                UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Disconnect Apple Music?") message:L(@"The synced playlists leave this device. The songs found on YouTube are remembered.")
+                                                           delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Disconnect"), nil];
+                a.tag = 2;
+                [a show];
+            }
+            break;
+        case TNSetHelper: {
+            UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Audio helper") message:L(@"The address of the helper (empty: none, only the first minute of songs plays).")
+                                                       delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Save"), L(@"Default"), nil];
+            a.alertViewStyle = UIAlertViewStylePlainTextInput;
+            a.tag = 1;
+            [a textFieldAtIndex:0].text = [TNSettings resolverBase];
+            [a textFieldAtIndex:0].keyboardType = UIKeyboardTypeURL;
+            [a show];
+            break;
+        }
+        case TNSetStorage:
+            if (row == 0) {
+                [[TNImageLoader shared] clearMemory];
+                [[TNImageLoader shared] clearDiskWithCompletion:^{
+                    self.cacheSize = [TNUtils formatFileSize:0];
+                    [self.tableView reloadData];
+                    [TNRouter toast:L(@"Image cache cleared")];
+                }];
+            } else if (row == 1) {
+                [[TNLibrary shared] clearRecent];
+                [TNRouter toast:L(@"Cleared")];
+            } else {
+                [[TNMatcher shared] forgetAll];
+                [self.tableView reloadData];
+                [TNRouter toast:L(@"Cleared")];
+            }
+            break;
+        case TNSetAbout:
+            if (row == 1) [self.navigationController pushViewController:[[TNLicensesViewController alloc] init] animated:YES];
+            else if (row == 2) [TNExternalOpen presentOpenInForURL:[NSURL URLWithString:@"https://ko-fi.com/samcejko"] from:self anchor:[tableView cellForRowAtIndexPath:indexPath]];
+            break;
+    }
+}
+
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    if (buttonIndex == alertView.cancelButtonIndex) return;
+    if (alertView.tag == 1) {
+        if (buttonIndex == alertView.firstOtherButtonIndex) [TNSettings setResolverBase:[alertView textFieldAtIndex:0].text ?: @""];
+        else [TNSettings setResolverBase:nil];
+        [self.tableView reloadData];
+    } else if (alertView.tag == 2) {
+        [[TNAppleMusic shared] disconnect];
+        [self.tableView reloadData];
+    }
+}
+
+- (void)autoplayChanged:(UISwitch *)s { [TNSettings setAutoplay:s.on]; }
+- (void)videosChanged:(UISwitch *)s { [TNSettings setAllowVideosForApple:s.on]; }
+- (void)matchAllChanged:(UISwitch *)s { [TNSettings setMatchWholePlaylists:s.on]; }
+
+@end

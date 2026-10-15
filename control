@@ -1,0 +1,9 @@
+Package: com.samcejko.muzika
+Name: Muzika
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Unofficial YouTube Music client for iOS 6 (universal), in English and Czech, that plays your Apple Music playlists too: Home, Explore, moods and charts, search, albums, artists, playlists, song radio, lyrics, queue, shuffle and repeat, the lock screen controls. Connect Apple Music and its playlists play from YouTube Music, every song found by its ISRC. No account needed for YouTube Music.
+Maintainer: samcejko
+Author: samcejko
+Section: Multimedia
+Depends: firmware (>= 6.0), firmware (<< 7.0)
