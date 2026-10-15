@@ -45,6 +45,12 @@ typedef NS_ENUM(NSInteger, TNSearchFilter) {
 // One call from any thread, blocking (the matcher and the player use it on their worker threads)
 + (NSDictionary *)callSync:(NSString *)endpoint body:(NSDictionary *)body error:(NSError **)error;
 
+// The visitor id YouTube gave this app (nil when none or older than a day), and a fresh one (blocking)
++ (NSString *)visitorData;
++ (NSString *)freshVisitorDataSync;
++ (NSString *)language;
++ (NSString *)region;
+
 + (TNHTTPTask *)home:(void (^)(NSArray *shelves, NSError *error))completion;
 // Any page of shelves: Explore (FEmusic_explore), charts, new releases, a mood or genre, "Related" of a song
 + (TNHTTPTask *)browsePage:(NSString *)browseId params:(NSString *)params

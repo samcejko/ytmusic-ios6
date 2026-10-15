@@ -143,7 +143,7 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
     switch (section) {
         case TNSetApple: return L(@"Apple Music");
         case TNSetPlayback: return L(@"Playback");
-        case TNSetHelper: return L(@"Audio helper");
+        case TNSetHelper: return L(@"Audio helper (fallback)");
         case TNSetStorage: return L(@"Storage");
         case TNSetAbout: return L(@"About");
     }
@@ -155,7 +155,7 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
     switch (section) {
         case TNSetApple: return L(@"Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu.");
         case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing.");
-        case TNSetHelper: return L(@"YouTube gives the whole song only to its own apps. The helper (yt-dlp on a Raspberry Pi, the same one Tubie uses) finds the full-length audio. Its addresses work on the helper's own internet connection, so away from home songs may not play.");
+        case TNSetHelper: return L(@"Muzika takes the sound straight from YouTube. The helper (yt-dlp on a Raspberry Pi, the one Tubie uses) is asked only when YouTube refuses; empty: no helper.");
         case TNSetAbout: return L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple.");
     }
     return nil;
@@ -301,7 +301,7 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
             }
             break;
         case TNSetHelper: {
-            UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Audio helper") message:L(@"The address of the helper (empty: none, only the first minute of songs plays).")
+            UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Audio helper") message:L(@"The address of the helper Muzika asks when YouTube refuses the sound (empty: none).")
                                                        delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Save"), L(@"Default"), nil];
             a.alertViewStyle = UIAlertViewStylePlainTextInput;
             a.tag = 1;

@@ -552,6 +552,36 @@ static NSDictionary *TNFindKey(id node, NSString *key, int depth)
     return browseId;
 }
 
+#pragma mark - The visitor id
+
+// YouTube hands every visitor an id ("visitorData") with its first answer; the player of the audio (TNStreams) must
+// present it, else YouTube asks to "confirm you're not a bot". Kept for a day.
++ (void)storeVisitorData:(NSString *)visitorData
+{
+    if (!visitorData.length) return;
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    if ([[d stringForKey:@"ytVisitorData"] isEqualToString:visitorData]) return;
+    [d setObject:visitorData forKey:@"ytVisitorData"];
+    [d setObject:[NSDate date] forKey:@"ytVisitorDataDate"];
+}
+
++ (NSString *)visitorData
+{
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    NSString *v = [d stringForKey:@"ytVisitorData"];
+    NSDate *when = [d objectForKey:@"ytVisitorDataDate"];
+    if (!v.length || ![when isKindOfClass:[NSDate class]] || [when timeIntervalSinceNow] < -24 * 3600) return nil;
+    return v;
+}
+
++ (NSString *)freshVisitorDataSync
+{
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"ytVisitorData"];
+    // (the smallest page there is: the list of moods and genres)
+    [self callSync:@"browse" body:@{ @"browseId": @"FEmusic_moods_and_genres" } error:NULL];
+    return [[NSUserDefaults standardUserDefaults] stringForKey:@"ytVisitorData"];
+}
+
 + (NSDictionary *)callSync:(NSString *)endpoint body:(NSDictionary *)body error:(NSError **)error
 {
     NSMutableDictionary *full = body ? [body mutableCopy] : [NSMutableDictionary dictionary];
@@ -581,7 +611,10 @@ static NSDictionary *TNFindKey(id node, NSString *key, int depth)
         }
         NSInteger status = r.statusCode;
         NSDictionary *json = TNDict([TNUtils JSONObjectFromData:r.responseBody]);
-        if (status == 200 && json) return json;
+        if (status == 200 && json) {
+            [self storeVisitorData:TNStr(TNAt(json, @"responseContext.visitorData"))];
+            return json;
+        }
         NSString *message = TNStr(TNAt(json, @"error.message"));
         if (status >= 500) {
             failure = TNMakeError(TNErrorAPI, L(@"YouTube Music is not answering right now. Try again in a moment."));

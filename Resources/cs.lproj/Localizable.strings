@@ -163,7 +163,6 @@
 "Listen again" = "Poslechnout znovu";
 "Loading your playlists…" = "Načítám tvoje playlisty…";
 "Music videos for Apple songs" = "Videoklipy pro skladby z Apple";
-"No audio helper is set (Settings). Without it YouTube plays only the first minute." = "Není nastavený pomocník pro zvuk (Nastavení). Bez něj YouTube pustí jen první minutu.";
 "No radio for this song." = "Pro tuhle skladbu rádio není.";
 "Not connected" = "Nepřipojeno";
 "Not found on YouTube" = "Na YouTube nenalezeno";
@@ -195,7 +194,6 @@
 "Sync now" = "Synchronizovat";
 "Synced %@" = "Synchronizováno %@";
 "Syncing…" = "Synchronizuju…";
-"The address of the helper (empty: none, only the first minute of songs plays)." = "Adresa pomocníka (prázdná: žádný, skladby hrají jen první minutu).";
 "The audio helper answered with HTTP %ld." = "Pomocník pro zvuk odpověděl HTTP %ld.";
 "The audio helper could not be reached." = "Pomocník pro zvuk není dostupný.";
 "The audio helper: %@" = "Pomocník pro zvuk: %@";
@@ -224,9 +222,13 @@
 "Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu." = "Playlisty z Apple Music hrají z YouTube Music: každá skladba se hledá podle kódu ISRC, jinak podle názvu, interpreta a délky. Špatně nalezenou verzi opravíš v nabídce skladby.";
 "Your library is connected." = "Knihovna je připojená.";
 "Your library, synced %@. Pull down to sync again." = "Tvoje knihovna, synchronizováno %@. Stáhni dolů pro novou synchronizaci.";
-"YouTube gives the whole song only to its own apps. The helper (yt-dlp on a Raspberry Pi, the same one Tubie uses) finds the full-length audio. Its addresses work on the helper's own internet connection, so away from home songs may not play." = "YouTube dává celé skladby jen svým aplikacím. Pomocník (yt-dlp na Raspberry Pi, stejný jako pro Tubie) najde zvuk celé skladby. Jeho adresy fungují jen přes jeho vlastní připojení k internetu, takže mimo domov skladby hrát nemusí.";
 "YouTube Music answered with an error (HTTP %ld)." = "YouTube Music odpovědělo chybou (HTTP %ld).";
 "YouTube Music could not be reached." = "YouTube Music není dostupné.";
 "YouTube Music is not answering right now. Try again in a moment." = "YouTube Music teď neodpovídá. Zkus to za chvíli.";
 "YouTube offers no sound this player knows for this song." = "YouTube k této skladbě nemá zvuk, který tenhle přehrávač zná.";
 "YouTube version" = "Verze z YouTube";
+"Audio helper (fallback)" = "Pomocník pro zvuk (záloha)";
+"Muzika takes the sound straight from YouTube. The helper (yt-dlp on a Raspberry Pi, the one Tubie uses) is asked only when YouTube refuses; empty: no helper." = "Muzika bere zvuk přímo z YouTube. Pomocníka (yt-dlp na Raspberry Pi, stejný jako pro Tubie) se ptá, jen když YouTube odmítne; prázdné: žádný pomocník.";
+"The address of the helper Muzika asks when YouTube refuses the sound (empty: none)." = "Adresa pomocníka, kterého se Muzika ptá, když YouTube zvuk odmítne (prázdné: žádný).";
+"YouTube answered with an error (HTTP %ld)." = "YouTube odpověděl chybou (HTTP %ld).";
+"YouTube did not give the sound right now. Try again later." = "YouTube teď zvuk nedal. Zkus to později.";
