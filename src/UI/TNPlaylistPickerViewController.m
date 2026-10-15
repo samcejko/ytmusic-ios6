@@ -1,5 +1,6 @@
 #import "TNPlaylistPickerViewController.h"
 #import "TNCells.h"
+#import "TNImageLoader.h"
 #import "TNRouter.h"
 #import "TNTheme.h"
 #import "TNModels.h"
