@@ -44,6 +44,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 @property (nonatomic, strong) UIButton *saveButton;
 @property (nonatomic, strong) UIButton *moreButton;
 @property (nonatomic) BOOL mutating;
+@property (nonatomic, copy) NSString *shownPlaying;
 @end
 
 @implementation TNTrackListViewController
@@ -139,6 +140,26 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     [nc addObserver:self selector:@selector(libraryChanged) name:TNLibraryDidChangeNotification object:nil];
     [nc addObserver:self selector:@selector(matchesChanged) name:TNMatchDidChangeNotification object:nil];
     [nc addObserver:self selector:@selector(downloadsChanged) name:TNDownloadsDidChangeNotification object:nil];
+    [nc addObserver:self selector:@selector(playerChanged) name:TNPlayerDidChangeNotification object:nil];
+}
+
+// The red title of the song playing follows the player
+- (void)playerChanged
+{
+    NSString *key = [[TNPlayer shared].currentTrack key];
+    if ((key == self.shownPlaying || [key isEqualToString:self.shownPlaying]) || self.tableView.editing || self.mutating) return;
+    self.shownPlaying = key;
+    if (self.isViewLoaded && self.view.window) [self.tableView reloadData];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    NSString *key = [[TNPlayer shared].currentTrack key];
+    if (!(key == self.shownPlaying || [key isEqualToString:self.shownPlaying]) && !self.tableView.editing) {
+        self.shownPlaying = key;
+        [self.tableView reloadData];
+    }
 }
 
 - (void)libraryChanged
@@ -616,6 +637,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 {
     BOOL editing = !self.tableView.editing;
     [self.tableView setEditing:editing animated:YES];
+    for (TNTrackCell *cell in self.tableView.visibleCells) if ([cell isKindOfClass:[TNTrackCell class]]) cell.moreButton.hidden = editing;
     self.navigationItem.rightBarButtonItem = editing ? [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(toggleEditing)] : nil;
     if (!editing) [self load];
 }
@@ -650,6 +672,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     [cell.moreButton addTarget:self action:@selector(moreTapped:) forControlEvents:UIControlEventTouchUpInside];
     cell.moreButton.tag = indexPath.row;
     cell.showsReorderControl = self.kind == TNListOwn;
+    cell.moreButton.hidden = tableView.editing;
     return cell;
 }
 

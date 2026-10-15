@@ -11,6 +11,7 @@
 #import "TNImageLoader.h"
 #import "TNUtils.h"
 #import "TNTheme.h"
+#import "TNModern.h"
 #import "TNCommon.h"
 
 // The look of a dark grouped table on iOS 6: the rounded cells on charcoal, headers and footers drawn here
@@ -35,7 +36,9 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
     TNTheme *theme = [TNTheme shared];
     UIFont *font = header ? [theme boldBodyFont] : [theme smallFont];
     CGFloat inset = TNIsPad() ? 54 : 20;
-    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(width - inset * 2, 400)];
+    // (a few points to spare: newer systems lay text out a little taller than this measures)
+    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(width - inset * 2 - 8, 600)];
+    s.height = ceilf(s.height) + (TNModernIOS() ? ceilf(s.height / font.lineHeight) * 1.5f : 0);
     CGFloat h = ceilf(s.height) + (header ? 22 : 16);
     if (height) *height = h;
     UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, h)];
