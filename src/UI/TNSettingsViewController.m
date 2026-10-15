@@ -36,14 +36,13 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
     TNTheme *theme = [TNTheme shared];
     UIFont *font = header ? [theme boldBodyFont] : [theme smallFont];
     CGFloat inset = TNIsPad() ? 54 : 20;
-    // (a few points to spare: newer systems lay text out a little taller than this measures)
-    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(width - inset * 2 - 8, 600)];
-    s.height = ceilf(s.height) + (TNModernIOS() ? ceilf(s.height / font.lineHeight) * 1.5f : 0);
+    // (newer systems give the footer less width than the table has: measured narrower, the text never runs short)
+    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(width - inset * 2 - (TNModernIOS() ? 48 : 0), 600)];
     CGFloat h = ceilf(s.height) + (header ? 22 : 16);
     if (height) *height = h;
     UIView *v = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, h)];
     UILabel *l = [[UILabel alloc] initWithFrame:CGRectMake(inset, header ? 14 : 6, width - inset * 2, ceilf(s.height))];
-    l.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    l.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     l.text = text;
     l.font = font;
     l.numberOfLines = 0;
