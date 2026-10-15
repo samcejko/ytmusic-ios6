@@ -93,6 +93,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
     [application setStatusBarStyle:UIStatusBarStyleBlackOpaque animated:NO];
 
     [TNLibrary shared];
+    [[TNPlayer shared] restoreState];   // (the queue and the place in the song, as they were left)
     // the Apple Music library is synced once a day by itself
     NSDate *last = [TNSettings appleLastSync];
     if ([[TNAppleMusic shared] connected] && (!last || [last timeIntervalSinceNow] < -20 * 3600)) {
@@ -109,9 +110,10 @@ static BOOL TNPressView(UIView *v, NSString *text)
 {
     [TNSettings save];
     [[TNLibrary shared] saveNow];
+    [[TNPlayer shared] saveState];
 }
 
-- (void)applicationWillTerminate:(UIApplication *)application { [[TNLibrary shared] saveNow]; }
+- (void)applicationWillTerminate:(UIApplication *)application { [[TNLibrary shared] saveNow]; [[TNPlayer shared] saveState]; }
 
 - (void)applicationDidReceiveMemoryWarning:(UIApplication *)application { [[TNImageLoader shared] clearMemory]; }
 

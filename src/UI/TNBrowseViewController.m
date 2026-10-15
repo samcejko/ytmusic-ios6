@@ -5,6 +5,7 @@
 #import "TNModels.h"
 #import "TNYTMusic.h"
 #import "TNPlayer.h"
+#import "TNAppleChartsViewController.h"
 #import "TNCommon.h"
 
 @interface TNBrowseViewController ()
@@ -41,7 +42,18 @@
     [self.tableView reloadData];   // (another number of tiles per row, wider song columns)
 }
 
-- (NSArray *)shelvesForLoaded:(NSArray *)loaded { return loaded ?: @[]; }
+- (NSArray *)shelvesForLoaded:(NSArray *)loaded
+{
+    if (![self.browseId isEqualToString:@"FEmusic_explore"] || !loaded.count) return loaded ?: @[];
+    // Explore: Apple Music's charts first
+    TNCategory *charts = [[TNCategory alloc] init];
+    charts.title = L(@"Apple Music charts");
+    charts.browseId = TNAppleChartsBrowseId;
+    charts.colorHex = @"#FA233B";
+    TNShelf *shelf = [[TNShelf alloc] init];
+    shelf.items = @[ charts ];
+    return [@[ shelf ] arrayByAddingObjectsFromArray:loaded];
+}
 
 - (void)load
 {

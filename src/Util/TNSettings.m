@@ -15,6 +15,12 @@ static const NSUInteger TNMaxRecentSearches = 12;
         @"autoplay": @YES,
         @"allowVideosForApple": @YES,
         @"matchWholePlaylists": @YES,
+        @"normalize": @YES,
+        @"crossfade": @0,
+        @"dataSaver": @YES,
+        @"downloadWiFiOnly": @YES,
+        @"syncAppleLikes": @YES,
+        @"sidePanel": @YES,
         @"verifyTLS": @YES,
         @"recentSearches": @[],
     }];
@@ -37,6 +43,24 @@ static const NSUInteger TNMaxRecentSearches = 12;
 
 + (BOOL)matchWholePlaylists { return [DEF boolForKey:@"matchWholePlaylists"]; }
 + (void)setMatchWholePlaylists:(BOOL)value { [DEF setBool:value forKey:@"matchWholePlaylists"]; [self notify]; }
+
++ (BOOL)normalize { return [DEF boolForKey:@"normalize"]; }
++ (void)setNormalize:(BOOL)value { [DEF setBool:value forKey:@"normalize"]; [self notify]; }
+
++ (NSInteger)crossfadeSeconds { return MAX(0, MIN(12, [DEF integerForKey:@"crossfade"])); }
++ (void)setCrossfadeSeconds:(NSInteger)value { [DEF setInteger:MAX(0, MIN(12, value)) forKey:@"crossfade"]; [self notify]; }
+
++ (BOOL)dataSaver { return [DEF boolForKey:@"dataSaver"]; }
++ (void)setDataSaver:(BOOL)value { [DEF setBool:value forKey:@"dataSaver"]; [self notify]; }
+
++ (BOOL)downloadOnWiFiOnly { return [DEF boolForKey:@"downloadWiFiOnly"]; }
++ (void)setDownloadOnWiFiOnly:(BOOL)value { [DEF setBool:value forKey:@"downloadWiFiOnly"]; [self notify]; }
+
++ (BOOL)syncAppleLikes { return [DEF boolForKey:@"syncAppleLikes"]; }
++ (void)setSyncAppleLikes:(BOOL)value { [DEF setBool:value forKey:@"syncAppleLikes"]; [self notify]; }
+
++ (BOOL)sidePanel { return [DEF boolForKey:@"sidePanel"]; }
++ (void)setSidePanel:(BOOL)value { [DEF setBool:value forKey:@"sidePanel"]; [self notify]; }
 
 #pragma mark - Apple Music
 

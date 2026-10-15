@@ -8,6 +8,9 @@
 static NSString * const TNPlayerURL = @"https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
 static NSString * const TNVisionVersion = @"0.1";
 
+@implementation TNAudioSource
+@end
+
 @implementation TNStreams
 
 static NSMutableDictionary *TNStreamCache(void)
@@ -36,19 +39,19 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     @synchronized (TNStreamCache()) { [TNStreamCache() removeObjectForKey:videoId]; }
 }
 
-+ (void)remember:(NSString *)url durationMs:(NSInteger)ms forVideo:(NSString *)videoId
++ (void)remember:(NSDictionary *)formats forVideo:(NSString *)videoId
 {
-    long long expire = [TNQueryValue(url, @"expire") longLongValue];
+    NSString *anyURL = TNStr(TNDict(formats[@"140"])[@"url"]) ?: TNStr(TNDict(formats[@"139"])[@"url"]);
+    long long expire = [TNQueryValue(anyURL, @"expire") longLongValue];
     NSDate *until = expire > 0 ? [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)expire - 900] : [NSDate dateWithTimeIntervalSinceNow:3600];
     @synchronized (TNStreamCache()) {
         if (TNStreamCache().count > 200) [TNStreamCache() removeAllObjects];
-        TNStreamCache()[videoId] = @{ @"url": url, @"ms": @(ms), @"until": until };
+        TNStreamCache()[videoId] = @{ @"formats": formats, @"until": until };
     }
 }
-
 #pragma mark - Straight from YouTube
 
-// The player API as YouTube's visionOS app: @{url, ms}, or nil. `refused`: YouTube turned the client itself away (a
+// The player API as YouTube's visionOS app: @{itag: {url, ms, loud}}, or nil. `refused`: YouTube turned the client itself away (a
 // bot check, a sign-in, a changed API) rather than this one song.
 + (NSDictionary *)directSync:(NSString *)videoId visitorData:(NSString *)visitorData refused:(BOOL *)refused error:(NSError **)error
 {
@@ -92,15 +95,20 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         return nil;
     }
     NSDictionary *streaming = TNDict(json[@"streamingData"]);
+    NSMutableDictionary *formats = [NSMutableDictionary dictionary];
+    NSInteger lengthMs = TNInt(TNDict(json[@"videoDetails"])[@"lengthSeconds"]) * 1000;
     for (id f in TNArr(streaming[@"adaptiveFormats"]) ?: @[]) {
         NSDictionary *format = TNDict(f);
-        if (TNInt(format[@"itag"]) != 140) continue;
+        NSInteger itag = TNInt(format[@"itag"]);
+        if (itag != 140 && itag != 139) continue;
         NSString *url = TNStr(format[@"url"]);
         if (!url.length) continue;   // (a ciphered one: not for this client)
-        NSInteger ms = TNInt(format[@"approxDurationMs"]);
-        if (!ms) ms = TNInt(TNDict(json[@"videoDetails"])[@"lengthSeconds"]) * 1000;
-        return @{ @"url": url, @"ms": @(ms) };
+        // (several audio tracks of a dubbed video: the original one)
+        if (TNDict(format[@"audioTrack"]) && !TNBool(TNDict(format[@"audioTrack"])[@"audioIsDefault"])) continue;
+        NSInteger ms = TNInt(format[@"approxDurationMs"]) ?: lengthMs;
+        formats[[NSString stringWithFormat:@"%ld", (long)itag]] = @{ @"url": url, @"ms": @(ms), @"loud": @(TNDbl(format[@"loudnessDb"])) };
     }
+    if (formats[@"140"]) return formats;
     // no plain address at all: the API changed for this client
     *refused = YES;
     if (error) *error = TNMakeError(TNErrorRefused, L(@"YouTube offers no sound this player knows for this song."));
@@ -109,7 +117,7 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
 
 #pragma mark - The address
 
-+ (NSString *)audioURLForVideo:(NSString *)videoId durationMs:(NSInteger *)durationMs error:(NSError **)error
++ (TNAudioSource *)audioForVideo:(NSString *)videoId lowQuality:(BOOL)lowQuality error:(NSError **)error
 {
     if (!videoId.length) {
         if (error) *error = TNMakeError(TNErrorPlayback, L(@"This song cannot be played."));
@@ -117,30 +125,31 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     }
     NSDictionary *cached;
     @synchronized (TNStreamCache()) { cached = TNStreamCache()[videoId]; }
-    if (cached && [cached[@"until"] timeIntervalSinceNow] > 0) {
-        if (durationMs) *durationMs = [cached[@"ms"] integerValue];
-        return cached[@"url"];
+    NSDictionary *formats = cached && [cached[@"until"] timeIntervalSinceNow] > 0 ? cached[@"formats"] : nil;
+    if (!formats) {
+        // (a stale visitor id is renewed once)
+        BOOL refused = NO;
+        NSError *directError = nil;
+        NSString *visitor = [TNYTMusic visitorData] ?: [TNYTMusic freshVisitorDataSync];
+        formats = [self directSync:videoId visitorData:visitor refused:&refused error:&directError];
+        if (!formats && refused) {
+            visitor = [TNYTMusic freshVisitorDataSync];
+            formats = [self directSync:videoId visitorData:visitor refused:&refused error:&directError];
+        }
+        if (!formats) {
+            // a reason about this song (removed, region) skips to the next one; YouTube refusing the app altogether stops
+            if (error) *error = directError ?: TNMakeError(TNErrorRefused, L(@"YouTube did not give the sound right now. Try again later."));
+            return nil;
+        }
+        [self remember:formats forVideo:videoId];
     }
-    // (a stale visitor id is renewed once)
-    BOOL refused = NO;
-    NSError *directError = nil;
-    NSString *visitor = [TNYTMusic visitorData] ?: [TNYTMusic freshVisitorDataSync];
-    NSDictionary *found = [self directSync:videoId visitorData:visitor refused:&refused error:&directError];
-    if (!found && refused) {
-        visitor = [TNYTMusic freshVisitorDataSync];
-        found = [self directSync:videoId visitorData:visitor refused:&refused error:&directError];
-    }
-    if (!found) {
-        // a reason about this song (removed, region) skips to the next one; YouTube refusing the app altogether stops
-        if (error) *error = directError ?: TNMakeError(TNErrorRefused, L(@"YouTube did not give the sound right now. Try again later."));
-        return nil;
-    }
-    NSString *url = found[@"url"];
-    NSInteger ms = [found[@"ms"] integerValue];
-    [self remember:url durationMs:ms forVideo:videoId];
-    if (durationMs) *durationMs = ms;
-    TNLog(@"audio of %@: %.0f s", videoId, ms / 1000.0);
-    return url;
+    NSDictionary *f = (lowQuality ? TNDict(formats[@"139"]) : nil) ?: TNDict(formats[@"140"]);
+    TNAudioSource *s = [[TNAudioSource alloc] init];
+    s.url = TNStr(f[@"url"]);
+    s.itag = f == formats[@"139"] ? 139 : 140;
+    s.durationMs = TNInt(f[@"ms"]);
+    s.loudnessDb = TNDbl(f[@"loud"]);
+    TNLog(@"audio of %@: itag %ld, %.0f s, loudness %+.1f dB", videoId, (long)s.itag, s.durationMs / 1000.0, s.loudnessDb);
+    return s;
 }
-
 @end

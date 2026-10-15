@@ -1,4 +1,5 @@
 #import "TNLibrary.h"
+#import "TNAppleMusic.h"
 #import "TNModels.h"
 #import "TNUtils.h"
 #import "TNCommon.h"
@@ -12,6 +13,7 @@ static const NSUInteger TNMaxRecent = 100;
     NSMutableArray *_playlists;    // TNPlaylist
     NSMutableArray *_recent;       // TNTrack
     NSArray *_applePlaylists;      // TNPlaylist
+    NSArray *_appleRecent;         // TNPlaylist (library albums and playlists)
     NSMutableDictionary *_tracks;  // playlist key -> NSArray of TNTrack (loaded on demand)
     BOOL _saveScheduled;
     dispatch_queue_t _io;
@@ -72,6 +74,9 @@ static NSArray *TNJSONOf(NSArray *items)
         NSMutableArray *apple = [NSMutableArray array];
         for (id x in TNArr(json[@"apple"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [apple addObject:p]; }
         _applePlaylists = apple;
+        NSMutableArray *recent = [NSMutableArray array];
+        for (id x in TNArr(json[@"appleRecent"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [recent addObject:p]; }
+        _appleRecent = recent;
     }
     return self;
 }
@@ -90,7 +95,8 @@ static NSArray *TNJSONOf(NSArray *items)
 {
     _saveScheduled = NO;
     NSDictionary *json = @{ @"liked": TNJSONOf(_liked), @"recent": TNJSONOf(_recent), @"albums": TNJSONOf(_albums),
-                            @"artists": TNJSONOf(_artists), @"playlists": TNJSONOf(_playlists), @"apple": TNJSONOf(_applePlaylists) };
+                            @"artists": TNJSONOf(_artists), @"playlists": TNJSONOf(_playlists), @"apple": TNJSONOf(_applePlaylists),
+                            @"appleRecent": TNJSONOf(_appleRecent ?: @[]) };
     NSString *path = [[TNLibrary folder] stringByAppendingPathComponent:@"library.json"];
     dispatch_async(_io, ^{
         NSData *data = [TNUtils JSONDataFromObject:json];
@@ -119,6 +125,18 @@ static NSArray *TNJSONOf(NSArray *items)
     else if (!liked && i >= 0) [_liked removeObjectAtIndex:(NSUInteger)i];
     else return;
     [self changed:TNLibraryDidChangeNotification];
+    [[TNAppleMusic shared] sendLike:liked track:track];
+}
+
+- (void)addLikedFromApple:(NSArray *)tracks
+{
+    NSUInteger added = 0;
+    for (TNTrack *t in tracks) {
+        if ([self indexOfTrack:t in:_liked] >= 0) continue;
+        [_liked insertObject:t atIndex:0];
+        added++;
+    }
+    if (added) [self changed:TNLibraryDidChangeNotification];
 }
 
 #pragma mark - Albums, artists, playlists
@@ -181,7 +199,13 @@ static NSArray *TNJSONOf(NSArray *items)
     if (!playlist.playlistId.length) return;
     NSInteger i = [self indexOfPlaylist:playlist];
     if (saved && i < 0) [_playlists insertObject:playlist atIndex:0];
-    else if (!saved && i >= 0) [_playlists removeObjectAtIndex:(NSUInteger)i];
+    else if (!saved && i >= 0) {
+        [_playlists removeObjectAtIndex:(NSUInteger)i];
+        if (playlist.source == TNSourceLocal) {
+            [_tracks removeObjectForKey:[playlist key]];
+            [[NSFileManager defaultManager] removeItemAtPath:[self fileForPlaylist:playlist] error:NULL];
+        }
+    }
     else return;
     [self changed:TNLibraryDidChangeNotification];
 }
@@ -251,7 +275,94 @@ static NSArray *TNJSONOf(NSArray *items)
         NSData *data = [TNUtils JSONDataFromObject:json];
         if (data) [data writeToFile:path atomically:YES];
     });
+    if (playlist.source == TNSourceLocal) {
+        // (an own playlist: its count and cover follow its songs)
+        TNPlaylist *kept = [self ownPlaylist:playlist];
+        for (TNPlaylist *p in kept && kept != playlist ? @[ kept, playlist ] : @[ playlist ]) {
+            p.trackCount = (NSInteger)tracks.count;
+            if (!p.coverIsOwn) {
+                TNTrack *first = tracks.firstObject;
+                p.thumbnails = first.thumbnails;
+                p.appleArtwork = first.thumbnails.count ? nil : first.appleArtwork;
+            }
+        }
+        [self changed:TNLibraryDidChangeNotification];
+        return;
+    }
     [[NSNotificationCenter defaultCenter] postNotificationName:TNAppleDidChangeNotification object:self];
+}
+
+#pragma mark - Own playlists
+
+- (NSArray *)ownPlaylists
+{
+    NSMutableArray *out = [NSMutableArray array];
+    for (TNPlaylist *p in _playlists) if (p.source == TNSourceLocal) [out addObject:p];
+    return out;
+}
+
+- (TNPlaylist *)ownPlaylist:(TNPlaylist *)playlist
+{
+    NSInteger i = [self indexOfPlaylist:playlist];
+    return i >= 0 ? _playlists[(NSUInteger)i] : nil;
+}
+
+- (TNPlaylist *)createPlaylistNamed:(NSString *)name tracks:(NSArray *)tracks
+{
+    TNPlaylist *p = [[TNPlaylist alloc] init];
+    p.source = TNSourceLocal;
+    p.playlistId = [NSString stringWithFormat:@"m%.0f%04u", [[NSDate date] timeIntervalSince1970] * 1000, arc4random_uniform(10000)];
+    p.name = name.length ? name : L(@"New playlist");
+    [_playlists insertObject:p atIndex:0];
+    [self setTracks:tracks ?: @[] ofPlaylist:p];
+    return p;
+}
+
+- (void)renamePlaylist:(TNPlaylist *)playlist to:(NSString *)name
+{
+    if (!name.length) return;
+    playlist.name = name;
+    [self ownPlaylist:playlist].name = name;
+    [self changed:TNLibraryDidChangeNotification];
+}
+
+- (void)deletePlaylist:(TNPlaylist *)playlist { [self setSaved:NO playlist:playlist]; }
+
+- (NSUInteger)addTracks:(NSArray *)tracks toPlaylist:(TNPlaylist *)playlist
+{
+    NSMutableArray *all = [([self tracksOfPlaylist:playlist] ?: @[]) mutableCopy];
+    NSMutableSet *keys = [NSMutableSet set];
+    for (TNTrack *t in all) [keys addObject:[t key]];
+    NSUInteger added = 0;
+    for (TNTrack *t in tracks) {
+        if ([keys containsObject:[t key]]) continue;
+        [keys addObject:[t key]];
+        [all addObject:t];
+        added++;
+    }
+    if (added) [self setTracks:all ofPlaylist:playlist];
+    return added;
+}
+
+#pragma mark - The whole Apple library
+
+- (TNPlaylist *)appleSongsList
+{
+    TNPlaylist *p = [[TNPlaylist alloc] init];
+    p.source = TNSourceApple;
+    p.playlistId = @"library-songs";
+    p.fromLibrary = YES;
+    return p;
+}
+
+- (NSArray *)appleSongs { return [self tracksOfPlaylist:[self appleSongsList]] ?: @[]; }
+- (void)setAppleSongs:(NSArray *)songs { [self setTracks:songs ofPlaylist:[self appleSongsList]]; }
+- (NSArray *)appleRecentlyAdded { return _appleRecent ?: @[]; }
+
+- (void)setAppleRecentlyAdded:(NSArray *)items
+{
+    _appleRecent = [items copy];
+    [self changed:TNAppleDidChangeNotification];
 }
 
 - (void)forgetApple
@@ -264,6 +375,10 @@ static NSArray *TNJSONOf(NSArray *items)
         [[NSFileManager defaultManager] removeItemAtPath:[self fileForPlaylist:p] error:NULL];
     }
     _applePlaylists = @[];
+    _appleRecent = @[];
+    TNPlaylist *songs = [self appleSongsList];
+    [_tracks removeObjectForKey:[songs key]];
+    [[NSFileManager defaultManager] removeItemAtPath:[self fileForPlaylist:songs] error:NULL];
     [self changed:TNAppleDidChangeNotification];
 }
 

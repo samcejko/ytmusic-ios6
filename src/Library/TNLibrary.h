@@ -37,6 +37,20 @@
 - (NSArray *)tracksOfPlaylist:(TNPlaylist *)playlist;          // nil when not kept yet
 - (void)setTracks:(NSArray *)tracks ofPlaylist:(TNPlaylist *)playlist;
 - (void)forgetApple;                                          // disconnecting: the synced copy goes
+// The whole Apple Music library: every song (albums and artists are made from them) and what was added lately
+// (library albums and playlists)
+- (NSArray *)appleSongs;
+- (void)setAppleSongs:(NSArray *)songs;
+- (NSArray *)appleRecentlyAdded;
+- (void)setAppleRecentlyAdded:(NSArray *)items;
+- (void)addLikedFromApple:(NSArray *)tracks;                  // songs loved in Apple Music (not sent back)
+
+// Muzika's own playlists (they are among the saved playlists, source TNSourceLocal)
+- (NSArray *)ownPlaylists;
+- (TNPlaylist *)createPlaylistNamed:(NSString *)name tracks:(NSArray *)tracks;
+- (void)renamePlaylist:(TNPlaylist *)playlist to:(NSString *)name;
+- (void)deletePlaylist:(TNPlaylist *)playlist;
+- (NSUInteger)addTracks:(NSArray *)tracks toPlaylist:(TNPlaylist *)playlist;   // those not there yet; how many
 
 - (void)saveNow;
 

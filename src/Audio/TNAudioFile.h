@@ -6,6 +6,7 @@
 @interface TNAudioFile : NSObject
 
 - (instancetype)initWithURL:(NSString *)url;
+- (instancetype)initWithLocalPath:(NSString *)path;   // a downloaded song
 - (void)start;
 - (void)cancel;
 

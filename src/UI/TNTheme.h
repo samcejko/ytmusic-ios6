@@ -38,6 +38,10 @@ typedef NS_ENUM(NSInteger, TNIcon) {
     TNIconSync,
     TNIconCloud,
     TNIconWarning,
+    TNIconDownload,          // an arrow down into a tray
+    TNIconDownloaded,        // a filled disc with an arrow down (a song kept on the device)
+    TNIconMoon,              // the sleep timer
+    TNIconEdit,              // a pencil
 };
 
 // The look of Muzika: Spot6's iPad app of the iOS 6 years made YouTube-like - near-black textured panels, glossy black

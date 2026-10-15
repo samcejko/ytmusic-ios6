@@ -1,3 +1,4 @@
+#import "TNDownloads.h"
 #import "TNCells.h"
 #import "TNTheme.h"
 #import "TNImageLoader.h"
@@ -56,6 +57,7 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
 @property (nonatomic, strong) UILabel *durationLabel;
 @property (nonatomic, strong) UIImageView *explicitView;
 @property (nonatomic, strong) UIImageView *warningView;
+@property (nonatomic, strong) UIImageView *downloadedView;
 @property (nonatomic, strong) UIImageView *playingView;
 @end
 
@@ -82,6 +84,8 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
         [self.contentView addSubview:_explicitView];
         _warningView = [[UIImageView alloc] initWithImage:[theme icon:TNIconWarning size:14 color:[theme accentTextColor]]];
         [self.contentView addSubview:_warningView];
+        _downloadedView = [[UIImageView alloc] initWithImage:[theme icon:TNIconDownloaded size:14 color:[theme accentTextColor]]];
+        [self.contentView addSubview:_downloadedView];
         _playingView = [[UIImageView alloc] initWithImage:[theme icon:TNIconSpeaker size:16 color:[theme accentTextColor]]];
         [self.contentView addSubview:_playingView];
         _moreButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -117,6 +121,7 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     self.numberLabel.text = number > 0 ? [NSString stringWithFormat:@"%ld", (long)number] : @"";
     self.explicitView.hidden = !track.explicitContent;
     self.warningView.hidden = !(track.matchFailed && !track.videoId.length);
+    self.downloadedView.hidden = ![[TNDownloads shared] isDownloaded:track];
     self.playingView.hidden = !playing;
     self.art.hidden = !self.showsArt;
     self.numberLabel.hidden = self.showsArt || playing;
@@ -146,6 +151,10 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     CGFloat textX = x;
     if (!self.warningView.hidden) {
         self.warningView.frame = CGRectMake(textX, floorf(s.height / 2) + 4, 14, 14);
+        textX += 18;
+    }
+    if (!self.downloadedView.hidden) {
+        self.downloadedView.frame = CGRectMake(textX, floorf(s.height / 2) + 4, 14, 14);
         textX += 18;
     }
     if (!self.explicitView.hidden) {

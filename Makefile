@@ -26,7 +26,7 @@ Muzika_FILES := $(wildcard src/*.m) $(wildcard src/*/*.m) $(wildcard src/*/*.c) 
                vendor/mbedtls_glue.c \
                $(wildcard vendor/mbedtls/library/*.c)
 
-Muzika_FRAMEWORKS := UIKit Foundation CoreGraphics QuartzCore CoreText Security ImageIO AVFoundation CoreMedia MediaPlayer AudioToolbox
+Muzika_FRAMEWORKS := UIKit Foundation CoreGraphics QuartzCore CoreText Security ImageIO AVFoundation CoreMedia MediaPlayer AudioToolbox SystemConfiguration
 
 # Flags for every C-family file (also the vendored mbedTLS sources)
 Muzika_CFLAGS := -Isrc -Isrc/Net -Isrc/Music -Isrc/Apple -Isrc/Library -Isrc/Audio -Isrc/UI -Isrc/Util \

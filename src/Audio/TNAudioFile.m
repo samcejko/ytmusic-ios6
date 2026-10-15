@@ -19,6 +19,7 @@ static const NSUInteger TNMaxAudioFile = 64 * 1024 * 1024;
     NSCondition *_condition;
     BOOL _cancelled;
     TNHTTPRequest *_request;
+    NSData *_local;                // a downloaded song: the file mapped from the disk
 }
 
 - (instancetype)initWithURL:(NSString *)url
@@ -30,15 +31,32 @@ static const NSUInteger TNMaxAudioFile = 64 * 1024 * 1024;
     return self;
 }
 
+- (instancetype)initWithLocalPath:(NSString *)path
+{
+    if ((self = [super init])) {
+        _condition = [[NSCondition alloc] init];
+        _local = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:NULL];
+    }
+    return self;
+}
+
 - (void)dealloc
 {
     free(_buffer);
 }
 
-- (const uint8_t *)bytes { return _buffer; }
+- (const uint8_t *)bytes { return _local ? (const uint8_t *)_local.bytes : _buffer; }
 
 - (void)start
 {
+    if (_url == nil) {
+        // (a file on the disk: all of it is there at once)
+        self.length = _local.length;
+        self.available = _local.length;
+        if (!_local.length) self.error = TNMakeError(TNErrorPlayback, L(@"The downloaded song is damaged."));
+        [self finishWithError:self.error];
+        return;
+    }
     NSThread *t = [[NSThread alloc] initWithTarget:self selector:@selector(download) object:nil];
     t.name = @"TNAudioFile";
     [t start];

@@ -5,6 +5,11 @@
 #import "TNBrowseViewController.h"
 #import "TNMatchPickerViewController.h"
 #import "TNAppleConnectViewController.h"
+#import "TNPlaylistPickerViewController.h"
+#import "TNAppleChartsViewController.h"
+#import "TNDownloads.h"
+#import "TNImport.h"
+#import "TNSettings.h"
 #import "TNModels.h"
 #import "TNPlayer.h"
 #import "TNLibrary.h"
@@ -64,7 +69,105 @@
 
 @end
 
+// A UIAlertView with a text field and a block (keeps itself alive while it is up)
+@interface TNPrompt : NSObject <UIAlertViewDelegate>
+@property (nonatomic, copy) void (^completion)(NSString *text);
+@property (nonatomic, strong) TNPrompt *keepAlive;
+@end
+
+@implementation TNPrompt
+
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    if (buttonIndex != alertView.cancelButtonIndex && self.completion) {
+        self.completion([[alertView textFieldAtIndex:0].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]);
+    }
+    self.completion = nil;
+    self.keepAlive = nil;
+}
+
+@end
+
 @implementation TNRouter
+
++ (void)promptWithTitle:(NSString *)title message:(NSString *)message text:(NSString *)text placeholder:(NSString *)placeholder
+                 button:(NSString *)button completion:(void (^)(NSString *))completion
+{
+    TNPrompt *prompt = [[TNPrompt alloc] init];
+    prompt.completion = completion;
+    prompt.keepAlive = prompt;
+    UIAlertView *a = [[UIAlertView alloc] initWithTitle:title message:message delegate:prompt cancelButtonTitle:L(@"Cancel") otherButtonTitles:button, nil];
+    a.alertViewStyle = UIAlertViewStylePlainTextInput;
+    UITextField *f = [a textFieldAtIndex:0];
+    f.placeholder = placeholder;
+    f.text = text;
+    f.autocapitalizationType = UITextAutocapitalizationTypeSentences;
+    f.clearButtonMode = UITextFieldViewModeWhileEditing;
+    [a show];
+}
+
++ (void)importLinkPrompt
+{
+    NSString *clip = [UIPasteboard generalPasteboard].string ?: @"";
+    [self promptWithTitle:L(@"Import a link") message:L(@"Paste the link of a playlist or an album from Apple Music, Spotify or YouTube.")
+                     text:[TNImport canImport:clip] ? clip : @"" placeholder:@"https://..." button:L(@"Import") completion:^(NSString *link) {
+        if (!link.length) return;
+        if (![TNImport canImport:link]) { [self toast:L(@"Muzika can import links of Apple Music, Spotify and YouTube playlists.")]; return; }
+        [self importLink:link];
+    }];
+}
+
++ (void)importLink:(NSString *)link
+{
+    [self toast:L(@"Importing…")];
+    [TNImport importLink:link completion:^(TNPlaylist *playlist, NSError *error) {
+        if (!playlist) { [self toast:error.localizedDescription ?: L(@"The link could not be imported.")]; return; }
+        [self openPlaylist:playlist];
+    }];
+}
+
++ (void)addTracksToPlaylist:(NSArray *)tracks
+{
+    if (!tracks.count) return;
+    [[TNRootViewController shared] presentSheet:[[TNPlaylistPickerViewController alloc] initWithTracks:tracks]];
+}
+
++ (void)downloadTracks:(NSArray *)tracks
+{
+    NSMutableArray *todo = [NSMutableArray array];
+    TNDownloads *downloads = [TNDownloads shared];
+    for (TNTrack *t in tracks) if (t.playable && ![downloads isDownloaded:t] && ![downloads isWaiting:t]) [todo addObject:t];
+    if (!todo.count) { [self toast:L(@"Already downloaded")]; return; }
+    [downloads download:todo];
+    [self toast:todo.count == 1 ? L(@"Downloading…") : [NSString stringWithFormat:L(@"Downloading %lu songs…"), (unsigned long)todo.count]];
+}
+
++ (void)showSleepTimerFromView:(UIView *)view inController:(UIViewController *)controller
+{
+    TNPlayer *player = [TNPlayer shared];
+    NSString *title = L(@"Sleep timer");
+    if (player.sleepAtEndOfSong) title = L(@"The music stops at the end of this song.");
+    else if (player.sleepAt) title = [NSString stringWithFormat:L(@"The music stops in %@."), TNFormatDurationMs((NSInteger)([player.sleepAt timeIntervalSinceNow] * 1000))];
+    TNActionSheet *sheet = [[TNActionSheet alloc] initWithTitle:title];
+    for (NSNumber *n in @[ @5, @10, @15, @30, @45, @60, @90 ]) {
+        NSInteger minutes = [n integerValue];
+        [sheet addButton:[NSString stringWithFormat:L(@"%ld minutes"), (long)minutes] action:^{
+            [player setSleepTimerMinutes:minutes];
+            [self toast:[NSString stringWithFormat:L(@"The music stops in %ld minutes"), (long)minutes]];
+        }];
+    }
+    [sheet addButton:L(@"End of this song") action:^{
+        [player setSleepTimerMinutes:-1];
+        [self toast:L(@"The music stops at the end of this song")];
+    }];
+    if (player.sleepAt || player.sleepAtEndOfSong) {
+        [sheet addDestructiveButton:L(@"Turn the timer off") action:^{
+            [player setSleepTimerMinutes:0];
+            [self toast:L(@"Sleep timer off")];
+        }];
+    }
+    [sheet showFromView:view inController:controller];
+}
 
 + (void)push:(UIViewController *)controller
 {
@@ -88,13 +191,16 @@
 
 + (void)openCategory:(TNCategory *)category
 {
+    if ([category.browseId isEqualToString:TNAppleChartsBrowseId]) { [self openBrowseId:category.browseId params:nil title:category.title]; return; }
     [self push:[[TNBrowseViewController alloc] initWithBrowseId:category.browseId params:category.params title:category.title]];
 }
 
 + (void)openBrowseId:(NSString *)browseId params:(NSString *)params title:(NSString *)title
 {
     if (!browseId.length) return;
-    if ([browseId hasPrefix:@"MPREb_"]) {
+    if ([browseId isEqualToString:TNAppleChartsBrowseId]) {
+        [self push:[[TNAppleChartsViewController alloc] init]];
+    } else if ([browseId hasPrefix:@"MPREb_"]) {
         TNAlbum *a = [[TNAlbum alloc] init];
         a.browseId = browseId;
         a.name = title;
@@ -151,6 +257,10 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
 + (BOOL)openURL:(NSString *)url
 {
     NSString *u = [url stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([TNImport isSpotifyLink:u]) {
+        [self importLink:u];
+        return YES;
+    }
     if ([TNAppleMusic isAppleMusicLink:u]) {
         [self toast:L(@"Importing from Apple Music…")];
         [[TNAppleMusic shared] importLink:u completion:^(TNPlaylist *playlist, NSArray *tracks, NSError *error) {
@@ -202,6 +312,7 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
 
 + (void)toast:(NSString *)text
 {
+    if (!text.length) return;
     [[TNRootViewController shared] showToast:text];
 }
 
@@ -227,6 +338,12 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
 
 + (void)showActionsForTrack:(TNTrack *)track fromView:(UIView *)view inController:(UIViewController *)controller
 {
+    [self showActionsForTrack:track fromView:view inController:controller removeTitle:nil remove:nil];
+}
+
++ (void)showActionsForTrack:(TNTrack *)track fromView:(UIView *)view inController:(UIViewController *)controller
+                removeTitle:(NSString *)removeTitle remove:(dispatch_block_t)remove
+{
     if (!track) return;
     TNActionSheet *sheet = [[TNActionSheet alloc] initWithTitle:[NSString stringWithFormat:@"%@\n%@", track.name ?: @"", [track artistNames] ?: @""]];
     TNPlayer *player = [TNPlayer shared];
@@ -236,6 +353,13 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
     }
     BOOL liked = [[TNLibrary shared] isLiked:track];
     [sheet addButton:liked ? L(@"Remove from Liked music") : L(@"Add to Liked music") action:^{ [self toggleLike:track]; }];
+    [sheet addButton:L(@"Add to playlist…") action:^{ [self addTracksToPlaylist:@[ track ]]; }];
+    TNDownloads *downloads = [TNDownloads shared];
+    if ([downloads isDownloaded:track]) {
+        [sheet addButton:L(@"Remove download") action:^{ [downloads remove:track]; [self toast:L(@"Download removed")]; }];
+    } else if (track.playable && ![downloads isWaiting:track]) {
+        [sheet addButton:L(@"Download") action:^{ [self downloadTracks:@[ track ]]; }];
+    }
     NSString *videoId = track.videoId ?: ([player isCurrent:track] ? player.currentVideoId : nil);
     if (videoId.length) [sheet addButton:L(@"Start radio") action:^{ [player startRadioFor:track]; [self toast:L(@"Starting radio…")]; }];
     if ([track isApple]) {
@@ -251,6 +375,7 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
             [self toast:L(@"Link copied")];
         }];
     }
+    if (remove) [sheet addDestructiveButton:removeTitle action:remove];
     [sheet showFromView:view inController:controller];
 }
 

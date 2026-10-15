@@ -56,6 +56,21 @@ extern NSString * const TNPlayerDidFailNotification;        // userInfo[@"error"
 @property (nonatomic, readonly) NSArray *contextTracks;    // the context in its own order
 @property (nonatomic, readonly) NSInteger contextIndex;    // the current song's place in it (-1: from the queue / none)
 - (BOOL)isCurrent:(TNTrack *)track;                        // the same song as the one playing
+- (void)moveQueueItemFrom:(NSUInteger)from to:(NSUInteger)to;
+- (void)moveUpcomingFrom:(NSUInteger)from to:(NSUInteger)to;   // indices as in -upcomingTracks:
+- (void)removeUpcomingAtIndex:(NSUInteger)index;
+- (void)playNextTracks:(NSArray *)tracks;                  // in their order, before the rest of the queue
+- (void)addTracksToQueue:(NSArray *)tracks;
+
+// The sleep timer: minutes from now (0: off, -1: at the end of this song)
+- (void)setSleepTimerMinutes:(NSInteger)minutes;
+@property (nonatomic, readonly) NSDate *sleepAt;
+@property (nonatomic, readonly) BOOL sleepAtEndOfSong;
+
+// The queue and the place in the song are kept between launches
+- (void)saveState;
+- (void)restoreState;
+- (NSInteger)resumePositionMs;                             // a restored song that has not started again yet
 
 - (void)handleRemoteEvent:(UIEvent *)event;              // from the app delegate
 - (NSString *)debugState;

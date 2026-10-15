@@ -7,12 +7,15 @@
 #import "TNAppleMusic.h"
 #import "TNImageLoader.h"
 #import "TNSettings.h"
+#import "TNDownloads.h"
+#import "TNTrackListViewController.h"
 #import "TNUtils.h"
 #import "TNCommon.h"
 
-@interface TNLibraryViewController () <UIAlertViewDelegate>
+@interface TNLibraryViewController ()
 @property (nonatomic) BOOL switcher;
 @property (nonatomic, strong) NSArray *items;
+@property (nonatomic, strong) NSArray *itemTracks;       // the Apple library's albums and artists: the songs of each item
 @property (nonatomic, strong) NSArray *fixedRows;        // NSDictionary {title, subtitle, icon, action} before the items
 @property (nonatomic, strong) UISegmentedControl *segments;
 @property (nonatomic, strong) UIView *appleHeader;
@@ -42,6 +45,9 @@
         case TNLibraryPlaylists: return L(@"Playlists");
         case TNLibraryAlbums: return L(@"Albums");
         case TNLibraryArtists: return L(@"Artists");
+        case TNLibraryAppleAlbums: return L(@"Albums");
+        case TNLibraryAppleArtists: return L(@"Artists");
+        case TNLibraryAppleRecent: return L(@"Recently added");
         default: return L(@"Apple Music");
     }
 }
@@ -66,6 +72,12 @@
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     [nc addObserver:self selector:@selector(load) name:TNLibraryDidChangeNotification object:nil];
     [nc addObserver:self selector:@selector(appleChanged) name:TNAppleDidChangeNotification object:nil];
+    [nc addObserver:self selector:@selector(downloadsChanged) name:TNDownloadsDidChangeNotification object:nil];
+}
+
+- (void)downloadsChanged
+{
+    if (self.mode == TNLibraryPlaylists) [self load];
 }
 
 - (void)segmentChanged
@@ -82,7 +94,7 @@
 
 - (void)appleChanged
 {
-    if (self.mode == TNLibraryApple) [self load];
+    if (self.mode >= TNLibraryApple) [self load];
 }
 
 #pragma mark - The Apple Music header
@@ -141,25 +153,53 @@
     }];
 }
 
-- (void)importLink
+- (void)importLink { [TNRouter importLinkPrompt]; }
+
+- (void)newPlaylist
 {
-    UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Import from Apple Music") message:L(@"Paste the link of a public playlist or an album (music.apple.com/...).")
-                                               delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Import"), nil];
-    a.alertViewStyle = UIAlertViewStylePlainTextInput;
-    UITextField *f = [a textFieldAtIndex:0];
-    f.placeholder = @"https://music.apple.com/...";
-    f.keyboardType = UIKeyboardTypeURL;
-    NSString *clip = [UIPasteboard generalPasteboard].string;
-    if ([TNAppleMusic isAppleMusicLink:clip ?: @""]) f.text = clip;
-    [a show];
+    [TNRouter promptWithTitle:L(@"New playlist") message:nil text:@"" placeholder:L(@"Name") button:L(@"Create") completion:^(NSString *name) {
+        if (!name.length) return;
+        [TNRouter openPlaylist:[[TNLibrary shared] createPlaylistNamed:name tracks:@[]]];
+    }];
 }
 
-- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+#pragma mark - The Apple library's albums and artists (from its songs)
+
+- (void)groupAppleSongs:(BOOL)albums
 {
-    if (buttonIndex == alertView.cancelButtonIndex) return;
-    NSString *link = [[alertView textFieldAtIndex:0].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (![TNAppleMusic isAppleMusicLink:link]) { [TNRouter toast:L(@"This is no link to an Apple Music playlist or album.")]; return; }
-    [TNRouter openURL:link];
+    NSMutableDictionary *groups = [NSMutableDictionary dictionary];
+    NSMutableArray *order = [NSMutableArray array];
+    for (TNTrack *t in [[TNLibrary shared] appleSongs]) {
+        NSString *artist = t.byline.length ? t.byline : L(@"Unknown artist");
+        NSString *key = albums ? [NSString stringWithFormat:@"%@|%@", [t.album.name ?: @"" lowercaseString], [artist lowercaseString]] : [artist lowercaseString];
+        if (albums && !t.album.name.length) continue;
+        NSMutableArray *list = groups[key];
+        if (!list) { list = [NSMutableArray array]; groups[key] = list; [order addObject:key]; }
+        [list addObject:t];
+    }
+    [order sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [a localizedCaseInsensitiveCompare:b]; }];
+    NSMutableArray *items = [NSMutableArray array], *tracks = [NSMutableArray array];
+    for (NSString *key in order) {
+        NSMutableArray *list = groups[key];
+        TNTrack *first = list.firstObject;
+        TNArtist *artist = [[TNArtist alloc] init];
+        artist.name = first.byline.length ? first.byline : L(@"Unknown artist");
+        NSString *art = TNAppleArtworkURL(first.appleArtwork, 300);
+        if (albums) {
+            [list sortUsingComparator:^NSComparisonResult(TNTrack *a, TNTrack *b) { return [@(a.trackNumber) compare:@(b.trackNumber)]; }];
+            TNAlbum *album = [[TNAlbum alloc] init];
+            album.name = first.album.name;
+            album.artists = @[ artist ];
+            if (art) album.thumbnails = @[ @{ @"url": art, @"width": @300, @"height": @300 } ];
+            [items addObject:album];
+        } else {
+            artist.subtitle = [NSString stringWithFormat:L(@"%lu songs"), (unsigned long)list.count];
+            [items addObject:artist];
+        }
+        [tracks addObject:list];
+    }
+    self.items = items;
+    self.itemTracks = tracks;
 }
 
 #pragma mark - Loading
@@ -187,9 +227,15 @@
         case TNLibraryPlaylists: {
             [fixed addObject:@{ @"title": L(@"Liked music"), @"subtitle": [NSString stringWithFormat:L(@"%lu songs"), (unsigned long)[library likedSongs].count], @"icon": @(TNIconThumbUpFilled), @"action": @"liked" }];
             [fixed addObject:@{ @"title": L(@"Recently played"), @"subtitle": [NSString stringWithFormat:L(@"%lu songs"), (unsigned long)[library recentTracks].count], @"icon": @(TNIconClock), @"action": @"recent" }];
+            TNDownloads *downloads = [TNDownloads shared];
+            NSString *got = [NSString stringWithFormat:L(@"%lu songs"), (unsigned long)[downloads downloadedTracks].count];
+            if (downloads.waitingCount) got = [NSString stringWithFormat:@"%@ • %@", got, downloads.state ?: @""];
+            [fixed addObject:@{ @"title": L(@"Downloads"), @"subtitle": got, @"icon": @(TNIconDownload), @"action": @"downloads" }];
             if (self.switcher && [[TNAppleMusic shared] connected]) {
                 [fixed addObject:@{ @"title": L(@"Apple Music"), @"subtitle": [NSString stringWithFormat:L(@"%lu playlists"), (unsigned long)[library applePlaylists].count], @"icon": @(TNIconCloud), @"action": @"apple" }];
             }
+            [fixed addObject:@{ @"title": L(@"New playlist"), @"subtitle": L(@"Your own, of any songs"), @"icon": @(TNIconPlus), @"action": @"new" }];
+            [fixed addObject:@{ @"title": L(@"Import a link"), @"subtitle": L(@"A playlist from Apple Music, Spotify or YouTube"), @"icon": @(TNIconLink), @"action": @"import" }];
             items = [library savedPlaylists];
             break;
         }
@@ -201,14 +247,36 @@
             items = [library savedArtists];
             empty = L(@"Artists you save show up here.");
             break;
+        case TNLibraryAppleAlbums:
+        case TNLibraryAppleArtists:
+            [self groupAppleSongs:self.mode == TNLibraryAppleAlbums];
+            items = self.items;
+            empty = L(@"Sync your Apple Music library first.");
+            break;
+        case TNLibraryAppleRecent:
+            items = [library appleRecentlyAdded];
+            empty = L(@"Sync your Apple Music library first.");
+            break;
         case TNLibraryApple: {
             NSMutableArray *all = [NSMutableArray array];
-            if ([[TNAppleMusic shared] connected]) [all addObjectsFromArray:[library applePlaylists]];
+            if ([[TNAppleMusic shared] connected]) {
+                NSUInteger songs = [library appleSongs].count;
+                if (songs) {
+                    [fixed addObject:@{ @"title": L(@"Songs"), @"subtitle": [NSString stringWithFormat:L(@"%lu songs"), (unsigned long)songs], @"icon": @(TNIconPlaylist), @"action": @"amsongs" }];
+                    [fixed addObject:@{ @"title": L(@"Albums"), @"subtitle": L(@"Your library's albums"), @"icon": @(TNIconAlbum), @"action": @"amalbums" }];
+                    [fixed addObject:@{ @"title": L(@"Artists"), @"subtitle": L(@"Your library's artists"), @"icon": @(TNIconArtist), @"action": @"amartists" }];
+                }
+                if ([library appleRecentlyAdded].count) {
+                    [fixed addObject:@{ @"title": L(@"Recently added"), @"subtitle": L(@"Albums and playlists"), @"icon": @(TNIconClock), @"action": @"amrecent" }];
+                }
+                [all addObjectsFromArray:[library applePlaylists]];
+            }
             for (TNPlaylist *p in [library savedPlaylists]) if (p.source == TNSourceApple) [all addObject:p];
             items = all;
             break;
         }
     }
+    if (self.mode != TNLibraryAppleAlbums && self.mode != TNLibraryAppleArtists) self.itemTracks = nil;
     self.fixedRows = fixed;
     self.items = items;
     if (self.mode == TNLibraryApple) [self showAppleHeader];
@@ -233,7 +301,7 @@
         cell.round = NO;
         [cell showTitle:d[@"title"] subtitle:d[@"subtitle"] imageURL:nil];
         TNIcon icon = (TNIcon)[d[@"icon"] integerValue];
-        cell.art.image = icon == TNIconCloud ? [theme appleMarkWithSize:52] : [theme icon:icon size:30 color:[theme accentTextColor]];
+        cell.art.image = icon == TNIconCloud ? [theme appleMarkWithSize:52] : [theme icon:icon size:28 color:[theme accentTextColor]];
         cell.art.contentMode = UIViewContentModeCenter;
         cell.art.backgroundColor = icon == TNIconCloud ? [UIColor clearColor] : [theme rowHighlightColor];
         return cell;
@@ -252,15 +320,34 @@
         if ([action isEqualToString:@"liked"]) [TNRouter openLikedSongs];
         else if ([action isEqualToString:@"recent"]) [TNRouter openRecent];
         else if ([action isEqualToString:@"apple"]) [TNRouter push:[[TNLibraryViewController alloc] initWithMode:TNLibraryApple switcher:NO]];
+        else if ([action isEqualToString:@"downloads"]) [TNRouter push:[[TNTrackListViewController alloc] initDownloads]];
+        else if ([action isEqualToString:@"new"]) [self newPlaylist];
+        else if ([action isEqualToString:@"import"]) [self importLink];
+        else if ([action isEqualToString:@"amalbums"]) [TNRouter push:[[TNLibraryViewController alloc] initWithMode:TNLibraryAppleAlbums switcher:NO]];
+        else if ([action isEqualToString:@"amartists"]) [TNRouter push:[[TNLibraryViewController alloc] initWithMode:TNLibraryAppleArtists switcher:NO]];
+        else if ([action isEqualToString:@"amrecent"]) [TNRouter push:[[TNLibraryViewController alloc] initWithMode:TNLibraryAppleRecent switcher:NO]];
+        else if ([action isEqualToString:@"amsongs"]) {
+            NSArray *songs = [[[TNLibrary shared] appleSongs] sortedArrayUsingComparator:^NSComparisonResult(TNTrack *a, TNTrack *b) {
+                return [a.name ?: @"" localizedCaseInsensitiveCompare:b.name ?: @""];
+            }];
+            [TNRouter push:[[TNTrackListViewController alloc] initWithTracks:songs title:L(@"Songs") contextURI:@"am:library-songs"]];
+        }
         return;
     }
-    [TNRouter openItem:self.items[row - self.fixedRows.count]];
+    NSUInteger index = row - self.fixedRows.count;
+    if (self.itemTracks && index < self.itemTracks.count) {
+        id item = self.items[index];
+        NSString *title = [item isKindOfClass:[TNAlbum class]] ? ((TNAlbum *)item).name : ((TNArtist *)item).name;
+        [TNRouter push:[[TNTrackListViewController alloc] initWithTracks:self.itemTracks[index] title:title contextURI:[@"am:group:" stringByAppendingString:title ?: @""]]];
+        return;
+    }
+    [TNRouter openItem:self.items[index]];
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
 {
     NSUInteger row = (NSUInteger)indexPath.row;
-    if (row < self.fixedRows.count) return NO;
+    if (row < self.fixedRows.count || self.mode >= TNLibraryAppleAlbums) return NO;
     id item = self.items[row - self.fixedRows.count];
     return !([item isKindOfClass:[TNPlaylist class]] && ((TNPlaylist *)item).fromLibrary);
 }

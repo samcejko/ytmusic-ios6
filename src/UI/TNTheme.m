@@ -686,6 +686,54 @@ static void TNArrowhead(CGPoint tip, CGFloat angle, CGFloat size)
             UIRectFill(CGRectMake(11, 9, 2, 6));
             UIRectFill(CGRectMake(11, 16.4, 2, 2));
             break;
+        case TNIconDownload:
+            p = [UIBezierPath bezierPath];
+            [p moveToPoint:CGPointMake(12, 3)];
+            [p addLineToPoint:CGPointMake(12, 15)];
+            TNStroke(p, 2.2);
+            TNArrowhead(CGPointMake(12, 16), (CGFloat)(M_PI / 2), 6);
+            p = [UIBezierPath bezierPath];
+            [p moveToPoint:CGPointMake(4, 15)];
+            [p addLineToPoint:CGPointMake(4, 20.5)];
+            [p addLineToPoint:CGPointMake(20, 20.5)];
+            [p addLineToPoint:CGPointMake(20, 15)];
+            TNStroke(p, 2);
+            break;
+        case TNIconDownloaded: {
+            [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(2, 2, 20, 20)] fill];
+            CGContextRef ctx = UIGraphicsGetCurrentContext();
+            CGContextSetBlendMode(ctx, kCGBlendModeClear);
+            p = [UIBezierPath bezierPath];
+            [p moveToPoint:CGPointMake(12, 6)];
+            [p addLineToPoint:CGPointMake(12, 14)];
+            TNStroke(p, 2.4);
+            p = [UIBezierPath bezierPath];
+            [p moveToPoint:CGPointMake(7.5, 12)];
+            [p addLineToPoint:CGPointMake(12, 16.8)];
+            [p addLineToPoint:CGPointMake(16.5, 12)];
+            TNStroke(p, 2.4);
+            CGContextSetBlendMode(ctx, kCGBlendModeNormal);
+            break;
+        }
+        case TNIconMoon: {
+            [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(3, 3, 18, 18)] fill];
+            CGContextRef ctx = UIGraphicsGetCurrentContext();
+            CGContextSetBlendMode(ctx, kCGBlendModeClear);
+            [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(9, 0.5, 15, 15)] fill];
+            CGContextSetBlendMode(ctx, kCGBlendModeNormal);
+            break;
+        }
+        case TNIconEdit:
+            p = [UIBezierPath bezierPath];
+            [p moveToPoint:CGPointMake(4, 20)];
+            [p addLineToPoint:CGPointMake(5, 15.5)];
+            [p addLineToPoint:CGPointMake(15.5, 5)];
+            [p addLineToPoint:CGPointMake(19, 8.5)];
+            [p addLineToPoint:CGPointMake(8.5, 19)];
+            [p closePath];
+            [p fill];
+            UIRectFill(CGRectMake(3, 21, 18, 1.5));
+            break;
     }
 }
 

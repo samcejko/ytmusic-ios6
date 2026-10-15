@@ -12,6 +12,7 @@
 
 @property (nonatomic, readonly) int sampleRate;
 @property (nonatomic, readonly) int channels;
+@property (nonatomic, readonly) BOOL heAAC;           // HE-AAC (SBR): 2048 frames a packet at twice the core rate
 @property (nonatomic, readonly) NSInteger bitrate;     // bits per second, as the file states it (0: unknown)
 @property (nonatomic) uint64_t totalFrames;            // from the song's length
 

@@ -5,6 +5,7 @@
 #import "TNTheme.h"
 #import "TNModels.h"
 #import "TNYTMusic.h"
+#import "TNLyrics.h"
 #import "TNLibrary.h"
 #import "TNImageLoader.h"
 #import "TNUtils.h"
@@ -14,13 +15,15 @@
 
 #pragma mark - Lyrics
 
-@interface TNLyricsViewController : UITableViewController
-@property (nonatomic, copy) NSString *videoId;
-@property (nonatomic, strong) NSArray *lines;       // NSString
+@interface TNLyricsViewController ()
+@property (nonatomic, copy) NSString *shownKey;
+@property (nonatomic, strong) NSArray *lines;       // NSDictionary {ms, text}
+@property (nonatomic) BOOL synced;
+@property (nonatomic) NSInteger currentLine;
 @property (nonatomic, copy) NSString *source;
 @property (nonatomic, copy) NSString *message;
-- (void)showVideo:(NSString *)videoId;
-- (void)tick;
+@property (nonatomic, strong) TNHTTPTask *task;
+@property (nonatomic, strong) NSTimer *timer;
 @end
 
 @implementation TNLyricsViewController
@@ -31,38 +34,82 @@
     self.tableView.backgroundColor = [UIColor clearColor];
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.showsVerticalScrollIndicator = NO;
-    self.tableView.contentInset = UIEdgeInsetsMake(30, 0, 60, 0);
+    self.tableView.contentInset = UIEdgeInsetsMake(30, 0, 80, 0);
+    self.currentLine = -1;
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:TNPlayerDidChangeNotification object:nil];
 }
 
-- (void)showVideo:(NSString *)videoId
+- (void)dealloc
 {
-    if (!videoId.length) {
-        self.videoId = nil;
-        self.lines = @[];
-        self.message = L(@"Loading lyrics…");
-        [self.tableView reloadData];
-        return;
-    }
-    if ([videoId isEqualToString:self.videoId]) return;
-    self.videoId = videoId;
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_timer invalidate];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self refresh];
+}
+
+- (void)viewDidDisappear:(BOOL)animated
+{
+    [super viewDidDisappear:animated];
+    [self.timer invalidate];
+    self.timer = nil;
+}
+
+// The song playing now (its lyrics are fetched once it is known what really plays)
+- (void)refresh
+{
+    if (!self.isViewLoaded || self.view.hidden) return;
+    if (!self.timer && self.view.window) self.timer = [NSTimer scheduledTimerWithTimeInterval:0.25 target:self selector:@selector(tick) userInfo:nil repeats:YES];
+    TNPlayer *player = [TNPlayer shared];
+    TNTrack *t = player.currentTrack;
+    NSString *videoId = player.currentVideoId ?: t.videoId;
+    NSString *key = t ? [NSString stringWithFormat:@"%@|%@", [t key], videoId ?: @""] : nil;
+    if ([key isEqualToString:self.shownKey]) return;
+    self.shownKey = key;
+    [self.task cancel];
     self.lines = @[];
+    self.synced = NO;
+    self.currentLine = -1;
     self.source = nil;
-    self.message = L(@"Loading lyrics…");
+    self.message = t ? L(@"Loading lyrics…") : L(@"Nothing playing");
     [self.tableView reloadData];
-    [TNYTMusic lyricsFor:videoId completion:^(NSString *text, NSString *source, NSError *error) {
-        if (![videoId isEqualToString:self.videoId]) return;
-        NSMutableArray *lines = [NSMutableArray array];
-        for (NSString *line in [text ?: @"" componentsSeparatedByString:@"\n"]) [lines addObject:[TNUtils displayText:line] ?: @""];
-        while (lines.count && ![lines.lastObject length]) [lines removeLastObject];
-        self.lines = lines;
-        self.source = source;
-        self.message = lines.count ? nil : (error ? error.localizedDescription : L(@"No lyrics for this song."));
-        [self.tableView reloadData];
-        if (lines.count) [self.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:NO];
+    if (!t || (!videoId.length && [t isApple] && !t.matchFailed)) return;   // (an Apple song still being looked up)
+    __weak TNLyricsViewController *weakSelf = self;
+    self.task = [TNLyrics lyricsFor:t videoId:videoId durationMs:player.durationMs completion:^(TNLyricsResult *result, NSError *error) {
+        TNLyricsViewController *me = weakSelf;
+        if (!me || ![key isEqualToString:me.shownKey]) return;
+        me.lines = result.lines ?: @[];
+        me.synced = result.synced;
+        me.source = result.source.length ? [NSString stringWithFormat:L(@"Lyrics: %@"), result.source] : nil;
+        me.message = me.lines.count ? nil : L(@"No lyrics for this song.");
+        [me.tableView reloadData];
+        if (me.lines.count) [me.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:NO];
+        [me tick];
     }];
 }
 
-- (void)tick {}
+- (void)tick
+{
+    if (!self.synced || !self.lines.count || self.view.hidden) return;
+    NSInteger ms = [TNPlayer shared].positionMs + 300;
+    NSInteger line = -1;
+    for (NSUInteger i = 0; i < self.lines.count; i++) {
+        if ([self.lines[i][@"ms"] integerValue] <= ms) line = (NSInteger)i; else break;
+    }
+    if (line == self.currentLine) return;
+    NSInteger old = self.currentLine;
+    self.currentLine = line;
+    NSMutableArray *rows = [NSMutableArray array];
+    if (old >= 0 && old < (NSInteger)self.lines.count) [rows addObject:[NSIndexPath indexPathForRow:old inSection:0]];
+    if (line >= 0) [rows addObject:[NSIndexPath indexPathForRow:line inSection:0]];
+    [self.tableView reloadRowsAtIndexPaths:rows withRowAnimation:UITableViewRowAnimationNone];
+    if (line >= 0 && !self.tableView.isDragging && !self.tableView.isDecelerating) {
+        [self.tableView scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:line inSection:0] atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
+    }
+}
 
 - (UIFont *)lineFont { return [UIFont fontWithName:@"HelveticaNeue-Bold" size:TNIsPad() ? 22 : 18] ?: [UIFont boldSystemFontOfSize:19]; }
 
@@ -74,7 +121,7 @@
 - (NSString *)textAt:(NSIndexPath *)ip
 {
     if (self.message) return self.message;
-    if ((NSUInteger)ip.row < self.lines.count) return self.lines[(NSUInteger)ip.row];
+    if ((NSUInteger)ip.row < self.lines.count) return self.lines[(NSUInteger)ip.row][@"text"];
     return self.source;
 }
 
@@ -86,7 +133,7 @@
     BOOL source = (NSUInteger)indexPath.row >= self.lines.count;
     UIFont *font = source ? [[TNTheme shared] smallFont] : [self lineFont];
     CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(tableView.bounds.size.width - 40, 400) lineBreakMode:NSLineBreakByWordWrapping];
-    return ceilf(s.height) + (source ? 24 : 10);
+    return ceilf(s.height) + (source ? 24 : 12);
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -100,17 +147,32 @@
     BOOL source = !self.message && (NSUInteger)indexPath.row >= self.lines.count;
     cell.textLabel.font = source ? [[TNTheme shared] smallFont] : [self lineFont];
     cell.textLabel.textAlignment = self.message ? NSTextAlignmentCenter : NSTextAlignmentLeft;
-    cell.textLabel.textColor = self.message || source ? [[TNTheme shared] secondaryTextColor] : [UIColor colorWithWhite:1 alpha:0.9];
+    if (self.message || source) {
+        cell.textLabel.textColor = [[TNTheme shared] secondaryTextColor];
+    } else {
+        BOOL current = indexPath.row == self.currentLine;
+        BOOL past = self.synced && indexPath.row < self.currentLine;
+        cell.textLabel.textColor = current ? [UIColor whiteColor] : (past ? [UIColor colorWithWhite:1 alpha:0.55] : [UIColor colorWithWhite:1 alpha:self.synced ? 0.32 : 0.88]);
+    }
     return cell;
 }
 
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    // (a line in time: the song jumps there)
+    if (!self.synced || self.message || (NSUInteger)indexPath.row >= self.lines.count) return;
+    [[TNPlayer shared] seekToMs:[self.lines[(NSUInteger)indexPath.row][@"ms"] integerValue]];
+}
+
 @end
+
 #pragma mark - Queue
 
 enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 
 @interface TNQueueViewController ()
 @property (nonatomic, strong) NSArray *upcoming;
+@property (nonatomic, strong) UIButton *editButton;
 - (void)refresh;
 @end
 
@@ -129,15 +191,29 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     self.tableView.separatorColor = [UIColor colorWithWhite:1 alpha:0.08];
     self.tableView.rowHeight = 56;
     [self.tableView registerClass:[TNTrackCell class] forCellReuseIdentifier:@"track"];
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 40)];
+    self.editButton = [[TNTheme shared] outlineButtonWithTitle:L(@"Edit")];
+    self.editButton.frame = CGRectMake(320 - 96, 6, 86, 28);
+    self.editButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+    [self.editButton addTarget:self action:@selector(toggleEditing) forControlEvents:UIControlEventTouchUpInside];
+    [header addSubview:self.editButton];
+    self.tableView.tableHeaderView = header;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:TNPlayerDidChangeNotification object:nil];
     [self refresh];
 }
 
 - (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
 
+- (void)toggleEditing
+{
+    [self.tableView setEditing:!self.tableView.editing animated:YES];
+    [self.editButton setTitle:[(self.tableView.editing ? L(@"Done") : L(@"Edit")) uppercaseString] forState:UIControlStateNormal];
+}
+
 - (void)refresh
 {
-    self.upcoming = [[TNPlayer shared] upcomingTracks:50];
+    if (self.tableView.editing) return;   // (the rows stay while they are moved)
+    self.upcoming = [[TNPlayer shared] upcomingTracks:100];
     [self.tableView reloadData];
 }
 
@@ -178,14 +254,47 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     cell.showsArt = YES;
     [cell showTrack:[self trackAt:indexPath] number:0];
     cell.moreButton.hidden = YES;
+    cell.showsReorderControl = YES;
     return cell;
 }
 
-- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath { return indexPath.section == TNQueueUser; }
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath { return indexPath.section != TNQueueNow; }
+- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath { return indexPath.section != TNQueueNow; }
+
+- (NSIndexPath *)tableView:(UITableView *)tableView targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)from toProposedIndexPath:(NSIndexPath *)to
+{
+    // (a song moves within its own part of the queue)
+    if (to.section == from.section) return to;
+    NSInteger rows = [self tableView:tableView numberOfRowsInSection:from.section];
+    return [NSIndexPath indexPathForRow:to.section < from.section ? 0 : MAX(0, rows - 1) inSection:from.section];
+}
+
+- (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)from toIndexPath:(NSIndexPath *)to
+{
+    TNPlayer *p = [TNPlayer shared];
+    if (from.section == TNQueueUser) [p moveQueueItemFrom:(NSUInteger)from.row to:(NSUInteger)to.row];
+    else if (from.section == TNQueueNext) {
+        [p moveUpcomingFrom:(NSUInteger)from.row to:(NSUInteger)to.row];
+        NSMutableArray *u = [self.upcoming mutableCopy];
+        id x = u[(NSUInteger)from.row];
+        [u removeObjectAtIndex:(NSUInteger)from.row];
+        [u insertObject:x atIndex:(NSUInteger)to.row];
+        self.upcoming = u;
+    }
+}
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    if (editingStyle == UITableViewCellEditingStyleDelete) [[TNPlayer shared] removeFromQueueAtIndex:(NSUInteger)indexPath.row];
+    if (editingStyle != UITableViewCellEditingStyleDelete) return;
+    TNPlayer *p = [TNPlayer shared];
+    if (indexPath.section == TNQueueUser) [p removeFromQueueAtIndex:(NSUInteger)indexPath.row];
+    else if (indexPath.section == TNQueueNext) {
+        [p removeUpcomingAtIndex:(NSUInteger)indexPath.row];
+        NSMutableArray *u = [self.upcoming mutableCopy];
+        [u removeObjectAtIndex:(NSUInteger)indexPath.row];
+        self.upcoming = u;
+    }
+    [tableView deleteRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationFade];
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath { return L(@"Remove"); }
@@ -220,6 +329,7 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 @property (nonatomic, strong) UIButton *repeatButton;
 @property (nonatomic, strong) UIButton *lyricsButton;
 @property (nonatomic, strong) UIButton *queueButton;
+@property (nonatomic, strong) UIButton *sleepButton;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) MPVolumeView *volume;
 @property (nonatomic, strong) TNLyricsViewController *lyrics;
@@ -290,6 +400,8 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     self.closeButton = [self button:TNIconChevronDown size:24 action:@selector(close)];
     self.closeButton.accessibilityLabel = L(@"Close");
     self.moreButton = [self button:TNIconMore size:22 action:@selector(more)];
+    self.sleepButton = [self button:TNIconMoon size:20 action:@selector(sleepTimer)];
+    self.sleepButton.accessibilityLabel = L(@"Sleep timer");
     self.contextLabel = [self label:[theme sectionFont] color:[theme secondaryTextColor]];
     self.contextLabel.numberOfLines = 2;
     self.titleLabel = [self label:[UIFont fontWithName:@"HelveticaNeue-Bold" size:TNIsPad() ? 24 : 19] ?: [UIFont boldSystemFontOfSize:20] color:[UIColor whiteColor]];
@@ -368,7 +480,8 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     if (top < 20 && TNModernIOS()) top = 20;
     self.closeButton.frame = CGRectMake(8, top + 4, 44, 44);
     self.moreButton.frame = CGRectMake(s.width - 52, top + 4, 44, 44);
-    self.contextLabel.frame = CGRectMake(60, top + 6, s.width - 120, 36);
+    self.sleepButton.frame = CGRectMake(s.width - 96, top + 4, 44, 44);
+    self.contextLabel.frame = CGRectMake(104, top + 6, s.width - 208, 36);
     CGFloat controlsH = TNIsPad() ? 250 : 210;
     if (landscape && TNIsPad()) {
         // the cover (or lyrics/queue) on the left, everything else on the right
@@ -423,7 +536,7 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     TNTheme *theme = [TNTheme shared];
     [self.lyricsButton setImage:[theme icon:TNIconLyrics size:24 color:self.panel == TNNowPlayingLyrics ? [theme accentColor] : [UIColor whiteColor]] forState:UIControlStateNormal];
     [self.queueButton setImage:[theme icon:TNIconQueue size:24 color:self.panel == TNNowPlayingQueue ? [theme accentColor] : [UIColor whiteColor]] forState:UIControlStateNormal];
-    if (self.panel == TNNowPlayingLyrics) [self.lyrics showVideo:[TNPlayer shared].currentVideoId];
+    if (self.panel == TNNowPlayingLyrics) [self.lyrics refresh];
     if (self.panel == TNNowPlayingQueue) [self.queue refresh];
 }
 
@@ -461,7 +574,6 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     self.shownURI = [t key];
     self.liked = [[TNLibrary shared] isLiked:t];
     [self showLiked];
-    if (self.panel == TNNowPlayingLyrics) [self.lyrics showVideo:player.currentVideoId];
     [self tick];
 }
 
@@ -480,7 +592,18 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
         self.elapsedLabel.text = TNFormatDurationMs(position);
         self.remainingLabel.text = duration > 0 ? [@"-" stringByAppendingString:TNFormatDurationMs(MAX(0, duration - position))] : @"";
     }
-    self.formatLabel.text = player.formatName ?: @"";
+    NSString *format = player.formatName ?: @"";
+    NSString *sleep = nil;
+    if (player.sleepAtEndOfSong) sleep = L(@"Sleep: end of song");
+    else if (player.sleepAt) sleep = [NSString stringWithFormat:L(@"Sleep: %@"), TNFormatDurationMs((NSInteger)MAX(0, [player.sleepAt timeIntervalSinceNow] * 1000))];
+    self.formatLabel.text = sleep ? (format.length ? [NSString stringWithFormat:@"%@ • %@", format, sleep] : sleep) : format;
+    BOOL sleeping = sleep != nil;
+    if (sleeping != self.sleepButton.selected) {
+        self.sleepButton.selected = sleeping;
+        TNTheme *theme = [TNTheme shared];
+        [self.sleepButton setImage:[theme icon:TNIconMoon size:20 color:sleeping ? [theme accentColor] : [UIColor whiteColor]] forState:UIControlStateNormal];
+        [self.sleepButton setImage:[theme icon:TNIconMoon size:20 color:sleeping ? [theme accentColor] : [UIColor whiteColor]] forState:UIControlStateSelected];
+    }
     if (player.buffering && player.playing) { [self.spinner startAnimating]; self.playButton.alpha = 0.15; }
     else { [self.spinner stopAnimating]; self.playButton.alpha = 1; }
     if (self.panel == TNNowPlayingLyrics) [self.lyrics tick];
@@ -522,6 +645,8 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     TNTrack *t = [TNPlayer shared].currentTrack;
     if (t) [TNRouter showActionsForTrack:t fromView:self.moreButton inController:self];
 }
+
+- (void)sleepTimer { [TNRouter showSleepTimerFromView:self.sleepButton inController:self]; }
 
 - (void)scrubStarted { self.scrubbing = YES; }
 

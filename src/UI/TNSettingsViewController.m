@@ -6,6 +6,8 @@
 #import "TNLibrary.h"
 #import "TNSettings.h"
 #import "TNPlayer.h"
+#import "TNDownloads.h"
+#import "TNTrackListViewController.h"
 #import "TNImageLoader.h"
 #import "TNUtils.h"
 #import "TNTheme.h"
@@ -82,7 +84,8 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
 
 #pragma mark - Settings
 
-enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
+enum { TNSetApple, TNSetPlayback, TNSetDownloads, TNSetStorage, TNSetAbout, TNSetCount };
+enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMatchAll, TNPlaySidePanel };
 
 @interface TNSettingsViewController () <UIAlertViewDelegate>
 @property (nonatomic, copy) NSString *cacheSize;
@@ -108,6 +111,7 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     [nc addObserver:self selector:@selector(reload) name:TNSettingsDidChangeNotification object:nil];
     [nc addObserver:self selector:@selector(reload) name:TNAppleDidChangeNotification object:nil];
+    [nc addObserver:self selector:@selector(reload) name:TNDownloadsDidChangeNotification object:nil];
 }
 
 - (void)reload { [self.tableView reloadData]; }
@@ -127,8 +131,9 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     switch (section) {
-        case TNSetApple: return [[TNAppleMusic shared] connected] ? 4 : 2;
-        case TNSetPlayback: return 3;
+        case TNSetApple: return [[TNAppleMusic shared] connected] ? 5 : 2;
+        case TNSetPlayback: return TNIsPad() ? 6 : 5;
+        case TNSetDownloads: return 4;
         case TNSetStorage: return 3;
         case TNSetAbout: return 3;
     }
@@ -140,6 +145,7 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
     switch (section) {
         case TNSetApple: return L(@"Apple Music");
         case TNSetPlayback: return L(@"Playback");
+        case TNSetDownloads: return L(@"Data and downloads");
         case TNSetStorage: return L(@"Storage");
         case TNSetAbout: return L(@"About");
     }
@@ -150,7 +156,8 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
 {
     switch (section) {
         case TNSetApple: return L(@"Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu.");
-        case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing.");
+        case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing. Same loudness: every song plays as loud as the next (by YouTube's measure of each song). Crossfade blends the end of a song into the next one.");
+        case TNSetDownloads: return L(@"Data saver: on mobile data songs play at 48 kbit/s (HE-AAC, about a third of the data). Downloaded songs play without the internet, in full quality.");
         case TNSetAbout: return L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple.");
     }
     return nil;
@@ -229,7 +236,8 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
                 cell.textLabel.text = L(@"Songs found on YouTube");
                 cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)[[TNMatcher shared] matchCount]];
             }
-            if (row == 3) {
+            if (row == 3) { cell.textLabel.text = L(@"Likes go to Apple Music"); cell.accessoryView = [self switchOn:[TNSettings syncAppleLikes] action:@selector(appleLikesChanged:)]; }
+            if (row == 4) {
                 cell.textLabel.text = L(@"Disconnect");
                 cell.textLabel.textAlignment = NSTextAlignmentCenter;
                 cell.textLabel.textColor = [UIColor colorWithRed:1 green:0.42 blue:0.38 alpha:1];
@@ -237,9 +245,35 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
             }
             break;
         case TNSetPlayback:
-            if (row == 0) { cell.textLabel.text = L(@"Autoplay"); cell.accessoryView = [self switchOn:[TNSettings autoplay] action:@selector(autoplayChanged:)]; }
-            if (row == 1) { cell.textLabel.text = L(@"Music videos for Apple songs"); cell.accessoryView = [self switchOn:[TNSettings allowVideosForApple] action:@selector(videosChanged:)]; }
-            if (row == 2) { cell.textLabel.text = L(@"Find whole playlists at once"); cell.accessoryView = [self switchOn:[TNSettings matchWholePlaylists] action:@selector(matchAllChanged:)]; }
+            if (row == TNPlayAutoplay) { cell.textLabel.text = L(@"Autoplay"); cell.accessoryView = [self switchOn:[TNSettings autoplay] action:@selector(autoplayChanged:)]; }
+            if (row == TNPlayNormalize) { cell.textLabel.text = L(@"Same loudness"); cell.accessoryView = [self switchOn:[TNSettings normalize] action:@selector(normalizeChanged:)]; }
+            if (row == TNPlayCrossfade) {
+                cell.textLabel.text = L(@"Crossfade");
+                NSInteger s = [TNSettings crossfadeSeconds];
+                cell.detailTextLabel.text = s ? [NSString stringWithFormat:L(@"%ld s"), (long)s] : L(@"Off");
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            if (row == TNPlayVideos) { cell.textLabel.text = L(@"Music videos for Apple songs"); cell.accessoryView = [self switchOn:[TNSettings allowVideosForApple] action:@selector(videosChanged:)]; }
+            if (row == TNPlayMatchAll) { cell.textLabel.text = L(@"Find whole playlists at once"); cell.accessoryView = [self switchOn:[TNSettings matchWholePlaylists] action:@selector(matchAllChanged:)]; }
+            if (row == TNPlaySidePanel) { cell.textLabel.text = L(@"Side panel in landscape"); cell.accessoryView = [self switchOn:[TNSettings sidePanel] action:@selector(sidePanelChanged:)]; }
+            break;
+        case TNSetDownloads:
+            if (row == 0) { cell.textLabel.text = L(@"Data saver"); cell.accessoryView = [self switchOn:[TNSettings dataSaver] action:@selector(dataSaverChanged:)]; }
+            if (row == 1) { cell.textLabel.text = L(@"Download on Wi-Fi only"); cell.accessoryView = [self switchOn:[TNSettings downloadOnWiFiOnly] action:@selector(wifiOnlyChanged:)]; }
+            if (row == 2) {
+                TNDownloads *downloads = [TNDownloads shared];
+                cell.textLabel.text = L(@"Downloaded songs");
+                cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu • %@", (unsigned long)[downloads downloadedTracks].count, [TNUtils formatFileSize:[downloads bytesUsed]]];
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
+            if (row == 3) {
+                cell.textLabel.text = L(@"Remove all downloads");
+                cell.textLabel.textAlignment = NSTextAlignmentCenter;
+                cell.textLabel.textColor = [UIColor colorWithRed:1 green:0.42 blue:0.38 alpha:1];
+                cell.selectionStyle = UITableViewCellSelectionStyleGray;
+            }
             break;
         case TNSetStorage:
             if (row == 0) {
@@ -280,10 +314,29 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
                 [apple syncWithCompletion:^(NSError *error) { [TNRouter toast:error ? error.localizedDescription : L(@"Apple Music synced")]; }];
                 [self.tableView reloadData];
             }
-            if (row == 3) {
+            if (row == 4) {
                 UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Disconnect Apple Music?") message:L(@"The synced playlists leave this device. The songs found on YouTube are remembered.")
                                                            delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Disconnect"), nil];
                 a.tag = 2;
+                [a show];
+            }
+            break;
+        case TNSetPlayback:
+            if (row == TNPlayCrossfade) {
+                TNActionSheet *sheet = [[TNActionSheet alloc] initWithTitle:L(@"Crossfade")];
+                for (NSNumber *n in @[ @0, @3, @6, @9, @12 ]) {
+                    NSInteger s = [n integerValue];
+                    [sheet addButton:s ? [NSString stringWithFormat:L(@"%ld s"), (long)s] : L(@"Off") action:^{ [TNSettings setCrossfadeSeconds:s]; }];
+                }
+                [sheet showFromView:[tableView cellForRowAtIndexPath:indexPath] inController:self];
+            }
+            break;
+        case TNSetDownloads:
+            if (row == 2) [self.navigationController pushViewController:[[TNTrackListViewController alloc] initDownloads] animated:YES];
+            if (row == 3 && [[TNDownloads shared] downloadedTracks].count) {
+                UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Remove all downloads?") message:L(@"The songs leave this device; they still play over the internet.")
+                                                           delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Remove"), nil];
+                a.tag = 3;
                 [a show];
             }
             break;
@@ -318,7 +371,17 @@ enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
         [[TNAppleMusic shared] disconnect];
         [self.tableView reloadData];
     }
+    if (alertView.tag == 3) {
+        [[TNDownloads shared] removeAll];
+        [TNRouter toast:L(@"Downloads removed")];
+    }
 }
+
+- (void)normalizeChanged:(UISwitch *)s { [TNSettings setNormalize:s.on]; }
+- (void)dataSaverChanged:(UISwitch *)s { [TNSettings setDataSaver:s.on]; }
+- (void)wifiOnlyChanged:(UISwitch *)s { [TNSettings setDownloadOnWiFiOnly:s.on]; }
+- (void)appleLikesChanged:(UISwitch *)s { [TNSettings setSyncAppleLikes:s.on]; }
+- (void)sidePanelChanged:(UISwitch *)s { [TNSettings setSidePanel:s.on]; }
 
 - (void)autoplayChanged:(UISwitch *)s { [TNSettings setAutoplay:s.on]; }
 - (void)videosChanged:(UISwitch *)s { [TNSettings setAllowVideosForApple:s.on]; }

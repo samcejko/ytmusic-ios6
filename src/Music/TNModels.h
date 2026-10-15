@@ -66,8 +66,10 @@ NSString *TNFormatDurationMs(NSInteger ms);       // 3:05, 1:02:03
 @property (nonatomic, copy) NSString *isrc;
 @property (nonatomic, copy) NSString *appleArtwork;   // the artwork template
 @property (nonatomic) BOOL matchFailed;               // looked for on YouTube, nothing fitted
+// A Spotify song (imported from a link): it is looked up on YouTube as an Apple Music one is
+@property (nonatomic, copy) NSString *spotifyId;
 
-- (BOOL)isApple;
+- (BOOL)isApple;                                       // it plays as its YouTube twin (Apple Music, Spotify)
 - (BOOL)playable;                                     // it has a video, or it is an Apple song that may find one
 - (NSString *)key;                                    // what it is known by (the same song from two lists is equal)
 - (NSString *)artistNames;
@@ -90,6 +92,8 @@ NSString *TNFormatDurationMs(NSInteger ms);       // 3:05, 1:02:03
 @property (nonatomic, copy) NSString *storefront;     // an Apple catalog playlist: its country
 @property (nonatomic) BOOL fromLibrary;               // Apple: one of the user's library playlists (else a catalog one)
 @property (nonatomic, copy) NSString *modified;       // Apple: lastModifiedDate
+@property (nonatomic) BOOL canEdit;                   // Apple: a library playlist songs can be added to
+@property (nonatomic) BOOL coverIsOwn;                // an own playlist with a picture of its own (an import's)
 @property (nonatomic, copy) NSArray *tracks;
 - (NSString *)imageURLForSize:(CGFloat)pixels;
 - (NSString *)key;

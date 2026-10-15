@@ -4,6 +4,7 @@
 #import "TNYTMusic.h"
 #import "TNLibrary.h"
 #import "TNImageLoader.h"
+#import "TNUtils.h"
 #import "TNSettings.h"
 #import "TNCommon.h"
 #import <UIKit/UIKit.h>
@@ -24,6 +25,8 @@ static const NSInteger TNMaxSkipsOnError = 5;
 @property (nonatomic, copy) NSString *contextURI;
 @property (nonatomic, copy) NSString *contextName;
 @property (nonatomic, strong) NSMutableArray *queue;          // user queue
+@property (nonatomic, strong) NSDate *sleepAt;
+@property (nonatomic) BOOL sleepAtEndOfSong;
 @end
 
 @implementation TNPlayer {
@@ -43,6 +46,9 @@ static const NSInteger TNMaxSkipsOnError = 5;
     BOOL _fetchingRadio;
     TNWatchQueue *_radio;             // the radio playing as the context (more of it comes when it runs low)
     TNHTTPTask *_radioMore;
+    NSTimer *_sleepTimer;
+    NSInteger _resumeMs;              // a restored song starts here (the place it was left at)
+    BOOL _saveScheduled;
 }
 
 + (instancetype)shared
@@ -63,13 +69,15 @@ static const NSInteger TNMaxSkipsOnError = 5;
         _engine = [TNPlaybackEngine shared];
         _engine.delegate = self;
         [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(updateNowPlaying) userInfo:nil repeats:YES];
+        // (the place in the song, every so often: iOS ends a background app without a word)
+        [NSTimer scheduledTimerWithTimeInterval:20.0 target:self selector:@selector(saveWhilePlaying) userInfo:nil repeats:YES];
     }
     return self;
 }
 
 - (NSArray *)userQueue { return [self.queue copy]; }
 - (BOOL)buffering { return self.loading || _engine.buffering; }
-- (NSInteger)positionMs { return _engine.currentItem ? _engine.positionMs : 0; }
+- (NSInteger)positionMs { return _engine.currentItem ? _engine.positionMs : _resumeMs; }
 - (NSInteger)durationMs { return _engine.currentItem.durationMs ?: self.currentTrack.durationMs; }
 - (NSString *)formatName { return _engine.currentItem.formatName; }
 
@@ -84,6 +92,7 @@ static const NSInteger TNMaxSkipsOnError = 5;
 {
     [[NSNotificationCenter defaultCenter] postNotificationName:TNPlayerDidChangeNotification object:self];
     [self updateNowPlaying];
+    [self scheduleSave];
 }
 
 #pragma mark - Context
@@ -382,6 +391,7 @@ static void TNShuffleArray(NSMutableArray *a)
 
 - (void)engineNeedsNextItem
 {
+    if (self.sleepAtEndOfSong) return;   // (the sleep timer ends with this song: nothing is prepared)
     BOOL fromQueue = NO;
     NSInteger position = -1;
     TNTrack *next = [self peekNext:&fromQueue position:&position];
@@ -417,6 +427,14 @@ static void TNShuffleArray(NSMutableArray *a)
 
 - (void)engineDidFinishItem:(TNPlaybackItem *)item
 {
+    if (self.sleepAtEndOfSong) {
+        [self setSleepTimerMinutes:0];
+        self.playing = NO;
+        [_engine stop];
+        _resumeMs = 0;
+        [self changed];
+        return;
+    }
     [self advanceAutomatically:YES];
 }
 
@@ -501,7 +519,11 @@ static void TNShuffleArray(NSMutableArray *a)
     if (!self.currentTrack) return;
     self.playing = YES;
     if (_engine.currentItem) [_engine resume];
-    else if (!self.loading) [self loadAndPlay:self.currentTrack];
+    else if (!self.loading) {
+        NSInteger from = _resumeMs;
+        _resumeMs = 0;
+        [self loadAndPlay:self.currentTrack fromMs:from paused:NO];
+    }
     [self changed];
 }
 
@@ -603,5 +625,166 @@ static void TNShuffleArray(NSMutableArray *a)
             self.contextName ?: @"-", (long)_orderPos, (unsigned long)_order.count, (unsigned long)self.queue.count, self.shuffle, (long)self.repeat,
             [_engine debugState]];
 }
+
+- (void)saveWhilePlaying { if (self.playing && _engine.currentItem) [self saveState]; }
+
+#pragma mark - Sleep timer
+
+- (void)setSleepTimerMinutes:(NSInteger)minutes
+{
+    [_sleepTimer invalidate];
+    _sleepTimer = nil;
+    self.sleepAt = nil;
+    self.sleepAtEndOfSong = minutes < 0;
+    if (minutes > 0) {
+        self.sleepAt = [NSDate dateWithTimeIntervalSinceNow:minutes * 60];
+        _sleepTimer = [NSTimer scheduledTimerWithTimeInterval:minutes * 60 target:self selector:@selector(sleepNow) userInfo:nil repeats:NO];
+    }
+    if (minutes < 0) [self dropPrepared];
+    [self changed];
+}
+
+- (void)sleepNow
+{
+    _sleepTimer = nil;
+    self.sleepAt = nil;
+    [self pause];
+}
+
+#pragma mark - Editing the queue
+
+- (void)moveQueueItemFrom:(NSUInteger)from to:(NSUInteger)to
+{
+    if (from >= self.queue.count || to >= self.queue.count || from == to) return;
+    id t = self.queue[from];
+    [self.queue removeObjectAtIndex:from];
+    [self.queue insertObject:t atIndex:to];
+    [self dropPrepared];
+    [self changed];
+}
+
+- (void)moveUpcomingFrom:(NSUInteger)from to:(NSUInteger)to
+{
+    NSInteger a = _orderPos + 1 + (NSInteger)from, b = _orderPos + 1 + (NSInteger)to;
+    if (a < 0 || b < 0 || a >= (NSInteger)_order.count || b >= (NSInteger)_order.count || a == b) return;
+    id x = _order[(NSUInteger)a];
+    [_order removeObjectAtIndex:(NSUInteger)a];
+    [_order insertObject:x atIndex:(NSUInteger)b];
+    [self dropPrepared];
+    [self changed];
+}
+
+- (void)removeUpcomingAtIndex:(NSUInteger)index
+{
+    NSInteger a = _orderPos + 1 + (NSInteger)index;
+    if (a < 0 || a >= (NSInteger)_order.count) return;
+    [_order removeObjectAtIndex:(NSUInteger)a];
+    [self dropPrepared];
+    [self changed];
+}
+
+- (void)playNextTracks:(NSArray *)tracks
+{
+    NSUInteger at = 0;
+    for (TNTrack *t in tracks) if ([t isKindOfClass:[TNTrack class]] && t.playable) [self.queue insertObject:t atIndex:at++];
+    [self dropPrepared];
+    [self changed];
+}
+
+- (void)addTracksToQueue:(NSArray *)tracks
+{
+    for (TNTrack *t in tracks) if ([t isKindOfClass:[TNTrack class]] && t.playable) [self.queue addObject:t];
+    [self dropPrepared];
+    [self changed];
+}
+
+#pragma mark - Where it was left (kept between launches)
+
++ (NSString *)statePath
+{
+    NSString *base = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *dir = [base stringByAppendingPathComponent:@"Muzika"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+    return [dir stringByAppendingPathComponent:@"queue.json"];
+}
+
+static NSArray *TNJSONTracks(NSArray *tracks)
+{
+    NSMutableArray *out = [NSMutableArray array];
+    for (TNTrack *t in tracks) [out addObject:[t toJSON]];
+    return out;
+}
+
+- (void)scheduleSave
+{
+    if (_saveScheduled) return;
+    _saveScheduled = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        self->_saveScheduled = NO;
+        [self saveState];
+    });
+}
+
+- (void)saveState
+{
+    TNTrack *current = self.currentTrack;
+    if (!current) { [[NSFileManager defaultManager] removeItemAtPath:[TNPlayer statePath] error:NULL]; return; }
+    NSArray *context = _contextTracks ?: @[];
+    NSArray *order = _order ?: @[];
+    NSInteger pos = _orderPos;
+    if (context.count > 1500) {
+        // (a huge context: the song and what follows in play order are enough)
+        NSMutableArray *window = [NSMutableArray array];
+        for (NSInteger p = MAX(0, pos); p < (NSInteger)order.count && window.count < 500; p++) [window addObject:context[[order[(NSUInteger)p] unsignedIntegerValue]]];
+        context = window;
+        NSMutableArray *o = [NSMutableArray array];
+        for (NSUInteger i = 0; i < window.count; i++) [o addObject:@(i)];
+        order = o;
+        pos = pos >= 0 ? 0 : -1;
+    }
+    NSInteger position = _engine.currentItem ? self.positionMs : _resumeMs;
+    NSDictionary *state = @{ @"context": TNJSONTracks(context), @"order": order, @"pos": @(pos), @"queue": TNJSONTracks(self.queue),
+                             @"current": [current toJSON], @"fromQueue": @(_currentFromQueue), @"ms": @(position),
+                             @"uri": self.contextURI ?: @"", @"name": self.contextName ?: @"", @"shuffle": @(self.shuffle), @"repeat": @(self.repeat) };
+    NSString *path = [TNPlayer statePath];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        [[TNUtils JSONDataFromObject:state] writeToFile:path atomically:YES];
+    });
+}
+
+- (void)restoreState
+{
+    NSDictionary *s = TNDict([TNUtils JSONObjectFromData:[NSData dataWithContentsOfFile:[TNPlayer statePath]]]);
+    TNTrack *current = [TNTrack fromJSON:TNDict(s[@"current"])];
+    if (!current) return;
+    NSMutableArray *context = [NSMutableArray array];
+    for (id j in TNArr(s[@"context"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [context addObject:t]; }
+    NSMutableArray *order = [NSMutableArray array];
+    for (id n in TNArr(s[@"order"]) ?: @[]) if ([n integerValue] >= 0 && [n unsignedIntegerValue] < context.count) [order addObject:@([n unsignedIntegerValue])];
+    if (order.count != context.count) { [order removeAllObjects]; for (NSUInteger i = 0; i < context.count; i++) [order addObject:@(i)]; }
+    _contextTracks = context;
+    _order = order;
+    _orderPos = MIN((NSInteger)order.count - 1, TNInt(s[@"pos"]));
+    // (the current song is the same object as its place in the context, so the list shows it as playing)
+    if (_orderPos >= 0 && !TNBool(s[@"fromQueue"])) {
+        TNTrack *atPos = context[[order[(NSUInteger)_orderPos] unsignedIntegerValue]];
+        if ([[atPos key] isEqualToString:[current key]]) current = atPos;
+    }
+    for (id j in TNArr(s[@"queue"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [self.queue addObject:t]; }
+    _currentFromQueue = TNBool(s[@"fromQueue"]);
+    _shuffle = TNBool(s[@"shuffle"]);
+    _repeat = (TNRepeatMode)TNInt(s[@"repeat"]);
+    self.contextURI = TNStr(s[@"uri"]);
+    self.contextName = TNStr(s[@"name"]);
+    self.currentTrack = current;
+    self.currentVideoId = current.videoId;
+    _resumeMs = TNInt(s[@"ms"]);
+    self.playing = NO;
+    TNLog(@"restored %@ at %.0f s, %lu songs around it", current.name, _resumeMs / 1000.0, (unsigned long)context.count);
+    [[NSNotificationCenter defaultCenter] postNotificationName:TNPlayerDidChangeNotification object:self];
+    [self updateNowPlaying];
+}
+
+- (NSInteger)resumePositionMs { return _resumeMs; }
 
 @end

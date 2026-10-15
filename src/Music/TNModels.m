@@ -206,7 +206,7 @@ static NSString *TNJoinNames(NSArray *artists)
 
 @implementation TNTrack
 
-- (BOOL)isApple { return self.appleId.length || self.appleCatalogId.length || self.isrc.length; }
+- (BOOL)isApple { return self.appleId.length || self.appleCatalogId.length || self.isrc.length || self.spotifyId.length; }
 
 - (BOOL)playable { return self.videoId.length > 0 || ([self isApple] && !self.matchFailed); }
 
@@ -216,6 +216,7 @@ static NSString *TNJoinNames(NSArray *artists)
         if (self.isrc.length) return [@"isrc:" stringByAppendingString:self.isrc];
         if (self.appleCatalogId.length) return [@"am:" stringByAppendingString:self.appleCatalogId];
         if (self.appleId.length) return [@"am:" stringByAppendingString:self.appleId];
+        if (self.spotifyId.length) return [@"sp:" stringByAppendingString:self.spotifyId];
     }
     if (self.videoId.length) return self.videoId;
     return [NSString stringWithFormat:@"t:%@|%@", [self.name lowercaseString] ?: @"", [[self artistNames] lowercaseString] ?: @""];
@@ -254,6 +255,7 @@ static NSString *TNJoinNames(NSArray *artists)
     TNPut(d, @"amc", self.appleCatalogId);
     TNPut(d, @"isrc", self.isrc);
     TNPut(d, @"art", self.appleArtwork);
+    TNPut(d, @"sp", self.spotifyId);
     return d;
 }
 
@@ -276,6 +278,7 @@ static NSString *TNJoinNames(NSArray *artists)
     t.appleCatalogId = TNStr(json[@"amc"]);
     t.isrc = TNStr(json[@"isrc"]);
     t.appleArtwork = TNStr(json[@"art"]);
+    t.spotifyId = TNStr(json[@"sp"]);
     return t.name.length || t.videoId.length ? t : nil;
 }
 
@@ -318,6 +321,8 @@ static NSString *TNJoinNames(NSArray *artists)
     TNPut(d, @"art", self.appleArtwork);
     TNPut(d, @"sf", self.storefront);
     if (self.fromLibrary) d[@"lib"] = @YES;
+    if (self.canEdit) d[@"edit"] = @YES;
+    if (self.coverIsOwn) d[@"cover"] = @YES;
     TNPut(d, @"mod", self.modified);
     return d;
 }
@@ -338,6 +343,8 @@ static NSString *TNJoinNames(NSArray *artists)
     p.appleArtwork = TNStr(json[@"art"]);
     p.storefront = TNStr(json[@"sf"]);
     p.fromLibrary = TNBool(json[@"lib"]);
+    p.canEdit = TNBool(json[@"edit"]);
+    p.coverIsOwn = TNBool(json[@"cover"]);
     p.modified = TNStr(json[@"mod"]);
     return p.playlistId.length ? p : nil;
 }

@@ -14,6 +14,18 @@
 + (void)setAllowVideosForApple:(BOOL)value;
 + (BOOL)matchWholePlaylists;                 // an opened Apple Music playlist is looked up on YouTube at once
 + (void)setMatchWholePlaylists:(BOOL)value;
++ (BOOL)normalize;                           // every song as loud as the next (YouTube's loudness of each song)
++ (void)setNormalize:(BOOL)value;
++ (NSInteger)crossfadeSeconds;               // 0 = off
++ (void)setCrossfadeSeconds:(NSInteger)value;
++ (BOOL)dataSaver;                           // on mobile data the 48 kbit/s HE-AAC version instead of 128 kbit/s AAC
++ (void)setDataSaver:(BOOL)value;
++ (BOOL)downloadOnWiFiOnly;
++ (void)setDownloadOnWiFiOnly:(BOOL)value;
++ (BOOL)syncAppleLikes;                      // the thumb and Apple Music's "love" go together
++ (void)setSyncAppleLikes:(BOOL)value;
++ (BOOL)sidePanel;                           // iPad landscape: "Up next" / lyrics beside the content
++ (void)setSidePanel:(BOOL)value;
 
 // Apple Music
 + (NSString *)appleUserToken;                // the "media-user-token" of music.apple.com (keychain)

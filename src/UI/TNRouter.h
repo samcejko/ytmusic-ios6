@@ -21,10 +21,19 @@
 + (void)openLikedSongs;
 + (void)openRecent;
 + (void)openItem:(id)item;                         // any shelf item: a song plays, the rest opens
-+ (BOOL)openURL:(NSString *)url;                   // music.youtube.com, youtube.com and music.apple.com links
++ (BOOL)openURL:(NSString *)url;                   // music.youtube.com, youtube.com, music.apple.com and open.spotify.com links
 + (void)push:(UIViewController *)controller;       // onto the content that is on screen (closing what covers it)
 
 + (void)showActionsForTrack:(TNTrack *)track fromView:(UIView *)view inController:(UIViewController *)controller;
++ (void)showActionsForTrack:(TNTrack *)track fromView:(UIView *)view inController:(UIViewController *)controller
+                removeTitle:(NSString *)removeTitle remove:(dispatch_block_t)remove;   // + a red "remove from this list"
++ (void)addTracksToPlaylist:(NSArray *)tracks;      // the playlist picker
++ (void)downloadTracks:(NSArray *)tracks;           // those not downloaded yet
++ (void)showSleepTimerFromView:(UIView *)view inController:(UIViewController *)controller;
++ (void)importLinkPrompt;                           // asks for an Apple Music, Spotify or YouTube link
++ (void)importLink:(NSString *)link;
++ (void)promptWithTitle:(NSString *)title message:(NSString *)message text:(NSString *)text placeholder:(NSString *)placeholder
+                 button:(NSString *)button completion:(void (^)(NSString *text))completion;   // a text field in an alert
 + (void)chooseVideoForTrack:(TNTrack *)track;      // an Apple Music song: which YouTube version plays
 + (void)toggleLike:(TNTrack *)track;
 + (void)showNowPlaying;

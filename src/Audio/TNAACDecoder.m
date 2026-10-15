@@ -104,6 +104,7 @@ static OSStatus TNFeedPacket(AudioConverterRef converter, UInt32 *ioPackets, Aud
 @property (nonatomic) uint64_t frame;
 @property (nonatomic) BOOL atEnd;
 @property (nonatomic) BOOL starved;
+@property (nonatomic) BOOL heAAC;
 @end
 
 @implementation TNAACDecoder {
@@ -215,7 +216,14 @@ static OSStatus TNFeedPacket(AudioConverterRef converter, UInt32 *ioPackets, Aud
                             int channelConfig = (asc[1] >> 3) & 0xf;
                             if (rateIndex < 13) self.sampleRate = rates[rateIndex];
                             if (channelConfig >= 1 && channelConfig <= 2) self.channels = channelConfig;
-                            if (objectType != 2) TNLog(@"aac: object type %d (only AAC-LC is meant to play)", objectType);
+                            if ((objectType == 5 || objectType == 29) && asc + 3 <= dEnd) {
+                                // HE-AAC, the SBR said outright: the rate it plays at follows
+                                int extension = ((asc[1] & 7) << 1) | (asc[2] >> 7);
+                                if (extension < 13) self.sampleRate = rates[extension];
+                                _heAAC = YES;
+                            } else if (objectType != 2) {
+                                TNLog(@"aac: object type %d (only AAC-LC and HE-AAC are meant to play)", objectType);
+                            }
                         }
                     }
                 }
@@ -265,9 +273,9 @@ static OSStatus TNFeedPacket(AudioConverterRef converter, UInt32 *ioPackets, Aud
     AudioStreamBasicDescription in;
     memset(&in, 0, sizeof(in));
     in.mSampleRate = self.sampleRate;
-    in.mFormatID = kAudioFormatMPEG4AAC;
+    in.mFormatID = _heAAC ? kAudioFormatMPEG4AAC_HE : kAudioFormatMPEG4AAC;
     in.mChannelsPerFrame = (UInt32)self.channels;
-    in.mFramesPerPacket = 1024;
+    in.mFramesPerPacket = _heAAC ? 2048 : 1024;
     AudioStreamBasicDescription out;
     memset(&out, 0, sizeof(out));
     out.mSampleRate = self.sampleRate;
@@ -322,7 +330,7 @@ static OSStatus TNFeedPacket(AudioConverterRef converter, UInt32 *ioPackets, Aud
     _dataStart = pos;
     _scanPos = pos;
     if (![self makeConverter:error]) return NO;
-    TNLog(@"aac: %d Hz, %d channel(s), %ld kbit/s, %lu index entries", self.sampleRate, self.channels, (long)(self.bitrate / 1000), (unsigned long)_index.count);
+    TNLog(@"aac: %@%d Hz, %d channel(s), %lu index entries", _heAAC ? @"HE-AAC " : @"", self.sampleRate, self.channels, (unsigned long)_index.count);
     return YES;
 }
 

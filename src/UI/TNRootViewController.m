@@ -28,6 +28,12 @@ static __weak TNRootViewController *TNRootShared;
 @property (nonatomic, strong) TNPlayerBar *playerBar;
 @property (nonatomic, strong) UILabel *toast;
 @property (nonatomic) NSUInteger toastGeneration;
+// iPad landscape: "Up next" or the lyrics beside the content
+@property (nonatomic, strong) UIView *sidePanel;
+@property (nonatomic, strong) UISegmentedControl *sideSegments;
+@property (nonatomic, strong) TNQueueViewController *sideQueue;
+@property (nonatomic, strong) TNLyricsViewController *sideLyrics;
+@property (nonatomic) BOOL sidePanelClosed;
 @end
 
 @implementation TNRootViewController
@@ -63,6 +69,7 @@ static __weak TNRootViewController *TNRootShared;
         self.divider = [[UIView alloc] initWithFrame:CGRectZero];
         self.divider.backgroundColor = [UIColor colorWithWhite:0 alpha:0.9];
         [self.view addSubview:self.divider];
+        [self buildSidePanel];
     } else {
         self.tabSections = @[ @(TNSectionHome), @(TNSectionExplore), @(TNSectionSearch), @(TNSectionLibrary), @(TNSectionSettings) ];
         NSArray *titles = @[ L(@"Home"), L(@"Explore"), L(@"Search"), L(@"Library"), L(@"Settings") ];
@@ -86,6 +93,86 @@ static __weak TNRootViewController *TNRootShared;
     [nc addObserver:self selector:@selector(showQueue) name:@"TNShowQueue" object:nil];
     [nc addObserver:self selector:@selector(showLyrics) name:@"TNShowLyrics" object:nil];
     [nc addObserver:self selector:@selector(playerFailed:) name:TNPlayerDidFailNotification object:nil];
+    [nc addObserver:self selector:@selector(settingsChanged) name:TNSettingsDidChangeNotification object:nil];
+}
+
+- (void)settingsChanged
+{
+    if (TNIsPad()) [self.view setNeedsLayout];
+}
+
+#pragma mark - The side panel (iPad)
+
+- (void)buildSidePanel
+{
+    TNTheme *theme = [TNTheme shared];
+    self.sidePanel = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, 400)];
+    self.sidePanel.backgroundColor = [theme panelColor];
+    self.sidePanel.clipsToBounds = YES;
+    UIImageView *bar = [[UIImageView alloc] initWithImage:[theme navigationBarImage]];
+    bar.frame = CGRectMake(0, 0, 300, 44);
+    bar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    [self.sidePanel addSubview:bar];
+    self.sideSegments = [[UISegmentedControl alloc] initWithItems:@[ L(@"Up next"), L(@"Lyrics") ]];
+    self.sideSegments.segmentedControlStyle = UISegmentedControlStyleBar;
+    self.sideSegments.tintColor = [UIColor colorWithWhite:0.25 alpha:1];
+    self.sideSegments.selectedSegmentIndex = 0;
+    self.sideSegments.frame = CGRectMake(12, 7, 236, 30);
+    [self.sideSegments addTarget:self action:@selector(sideTabChanged) forControlEvents:UIControlEventValueChanged];
+    [self.sidePanel addSubview:self.sideSegments];
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
+    [close setImage:[theme icon:TNIconClose size:16 color:[theme secondaryTextColor]] forState:UIControlStateNormal];
+    close.frame = CGRectMake(256, 0, 44, 44);
+    close.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+    close.accessibilityLabel = L(@"Close");
+    [close addTarget:self action:@selector(closeSidePanel) forControlEvents:UIControlEventTouchUpInside];
+    [self.sidePanel addSubview:close];
+    self.sideQueue = [[TNQueueViewController alloc] init];
+    self.sideLyrics = [[TNLyricsViewController alloc] initWithStyle:UITableViewStylePlain];
+    for (UIViewController *c in @[ self.sideQueue, self.sideLyrics ]) {
+        [self addChildViewController:c];
+        c.view.frame = CGRectMake(0, 44, 300, 356);
+        c.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self.sidePanel addSubview:c.view];
+        [c didMoveToParentViewController:self];
+    }
+    self.sidePanel.hidden = YES;
+    [self.view addSubview:self.sidePanel];
+    [self sideTabChanged];
+}
+
+- (BOOL)sidePanelAllowed
+{
+    CGSize s = self.view.bounds.size;
+    return TNIsPad() && [TNSettings sidePanel] && s.width > s.height;
+}
+
+- (BOOL)showsSidePanel { return [self sidePanelAllowed] && !self.sidePanelClosed && [TNPlayer shared].currentTrack != nil; }
+
+- (void)sideTabChanged
+{
+    BOOL lyrics = self.sideSegments.selectedSegmentIndex == 1;
+    self.sideQueue.view.hidden = lyrics;
+    self.sideLyrics.view.hidden = !lyrics;
+    if (lyrics) [self.sideLyrics refresh];
+    else [self.sideQueue refresh];
+}
+
+- (void)closeSidePanel
+{
+    self.sidePanelClosed = YES;
+    [UIView animateWithDuration:0.25 animations:^{ [self.view setNeedsLayout]; [self.view layoutIfNeeded]; }];
+}
+
+// The player bar's queue and lyrics buttons: in iPad landscape they open (or close) the side panel at that tab
+- (void)showSideTab:(NSInteger)tab
+{
+    BOOL open = [self showsSidePanel];
+    if (open && self.sideSegments.selectedSegmentIndex == tab) { [self closeSidePanel]; return; }
+    self.sidePanelClosed = NO;
+    self.sideSegments.selectedSegmentIndex = tab;
+    [self sideTabChanged];
+    if (!open) [UIView animateWithDuration:0.25 animations:^{ [self.view setNeedsLayout]; [self.view layoutIfNeeded]; }];
 }
 
 - (void)viewDidAppear:(BOOL)animated
@@ -118,7 +205,13 @@ static __weak TNRootViewController *TNRootShared;
         CGFloat side = s.width > s.height ? 250 : 220;
         self.sidebar.view.frame = CGRectMake(0, 0, side, s.height - barH - home);
         self.divider.frame = CGRectMake(side, 0, 1, s.height - barH - home);
-        self.current.view.frame = CGRectMake(side + 1, 0, s.width - side - 1, s.height - barH - home);
+        BOOL panel = [self showsSidePanel];
+        CGFloat panelW = panel ? 300 : 0;
+        self.current.view.frame = CGRectMake(side + 1, 0, s.width - side - 1 - (panel ? panelW + 1 : 0), s.height - barH - home);
+        BOOL wasHidden = self.sidePanel.hidden;
+        self.sidePanel.hidden = !panel;
+        self.sidePanel.frame = CGRectMake(s.width - panelW, 0, 300, s.height - barH - home);
+        if (panel && wasHidden) [self sideTabChanged];
         self.playerBar.frame = CGRectMake(0, s.height - barH - home, s.width, barH + home);
         self.playerBar.bottomInset = home;
     } else {
@@ -253,8 +346,17 @@ static __weak TNRootViewController *TNRootShared;
     [top presentViewController:np animated:YES completion:nil];
 }
 
-- (void)showQueue { [self presentNowPlayingPanel:TNNowPlayingQueue]; }
-- (void)showLyrics { [self presentNowPlayingPanel:TNNowPlayingLyrics]; }
+- (void)showQueue
+{
+    if ([self sidePanelAllowed] && [TNPlayer shared].currentTrack && [self presentedTop] == self) { [self showSideTab:0]; return; }
+    [self presentNowPlayingPanel:TNNowPlayingQueue];
+}
+
+- (void)showLyrics
+{
+    if ([self sidePanelAllowed] && [TNPlayer shared].currentTrack && [self presentedTop] == self) { [self showSideTab:1]; return; }
+    [self presentNowPlayingPanel:TNNowPlayingLyrics];
+}
 
 - (void)presentSheet:(UIViewController *)controller
 {
@@ -324,6 +426,9 @@ static __weak TNRootViewController *TNRootShared;
 
 - (void)playerChanged
 {
+    if (TNIsPad() && self.sidePanel.hidden == [self showsSidePanel]) {
+        [UIView animateWithDuration:0.25 animations:^{ [self.view setNeedsLayout]; [self.view layoutIfNeeded]; }];
+    }
     if (!TNIsPad() && self.playerBar.hidden == [self showsPlayerBar]) {
         [UIView animateWithDuration:0.25 animations:^{ [self.view setNeedsLayout]; [self.view layoutIfNeeded]; }];
     }

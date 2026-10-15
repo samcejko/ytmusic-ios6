@@ -12,9 +12,10 @@
 #import "TNImageLoader.h"
 #import "TNUtils.h"
 #import "TNExternalOpen.h"
+#import "TNDownloads.h"
 #import "TNCommon.h"
 
-typedef NS_ENUM(NSInteger, TNListKind) { TNListAlbum, TNListPlaylist, TNListApple, TNListLiked, TNListRecent, TNListTracks };
+typedef NS_ENUM(NSInteger, TNListKind) { TNListAlbum, TNListPlaylist, TNListApple, TNListLiked, TNListRecent, TNListTracks, TNListOwn, TNListDownloads };
 
 static NSString * const TNTrackCellId = @"track";
 static const NSUInteger TNMaxPlaylistLength = 3000;
@@ -41,6 +42,8 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 @property (nonatomic, strong) UIButton *playButton;
 @property (nonatomic, strong) UIButton *shuffleButton;
 @property (nonatomic, strong) UIButton *saveButton;
+@property (nonatomic, strong) UIButton *moreButton;
+@property (nonatomic) BOOL mutating;
 @end
 
 @implementation TNTrackListViewController
@@ -66,7 +69,8 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 
 - (instancetype)initWithPlaylist:(TNPlaylist *)playlist
 {
-    if ((self = [self initWithKind:playlist.source == TNSourceApple ? TNListApple : TNListPlaylist])) {
+    TNListKind kind = playlist.source == TNSourceApple ? TNListApple : playlist.source == TNSourceLocal ? TNListOwn : TNListPlaylist;
+    if ((self = [self initWithKind:kind])) {
         _playlist = playlist;
         _contextURI = [playlist key];
         _listTitle = playlist.name;
@@ -89,6 +93,16 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     if ((self = [self initWithKind:TNListRecent])) {
         _listTitle = L(@"Recently played");
         _contextURI = @"recent";
+        self.refreshable = NO;
+    }
+    return self;
+}
+
+- (instancetype)initDownloads
+{
+    if ((self = [self initWithKind:TNListDownloads])) {
+        _listTitle = L(@"Downloads");
+        _contextURI = @"downloads";
         self.refreshable = NO;
     }
     return self;
@@ -124,12 +138,21 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
     [nc addObserver:self selector:@selector(libraryChanged) name:TNLibraryDidChangeNotification object:nil];
     [nc addObserver:self selector:@selector(matchesChanged) name:TNMatchDidChangeNotification object:nil];
+    [nc addObserver:self selector:@selector(downloadsChanged) name:TNDownloadsDidChangeNotification object:nil];
 }
 
 - (void)libraryChanged
 {
-    if (self.kind == TNListLiked || self.kind == TNListRecent) [self load];
+    if (self.tableView.editing || self.mutating) return;   // (the rows stay while they are moved)
+    if (self.kind == TNListLiked || self.kind == TNListRecent || self.kind == TNListOwn) [self load];
     else [self showHeader];
+}
+
+- (void)downloadsChanged
+{
+    if (!self.isViewLoaded || self.tableView.editing || self.mutating) return;
+    if (self.kind == TNListDownloads) { [self load]; return; }
+    if (self.view.window) [self.tableView reloadData];
 }
 
 // New matches come one by one: the list is redrawn at most twice a second
@@ -185,6 +208,11 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     self.saveButton = [theme outlineButtonWithTitle:L(@"Save")];
     [self.saveButton addTarget:self action:@selector(toggleSaved) forControlEvents:UIControlEventTouchUpInside];
     [self.header addSubview:self.saveButton];
+    self.moreButton = [theme outlineButtonWithTitle:@""];
+    [self.moreButton setImage:[theme icon:TNIconMore size:18 color:[theme primaryTextColor]] forState:UIControlStateNormal];
+    self.moreButton.accessibilityLabel = L(@"More");
+    [self.moreButton addTarget:self action:@selector(listActions) forControlEvents:UIControlEventTouchUpInside];
+    [self.header addSubview:self.moreButton];
 }
 
 - (void)descriptionTapped
@@ -234,7 +262,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
             break;
         }
         case TNListApple: {
-            type = [self.playlist.playlistId hasPrefix:@"album:"] ? L(@"Apple Music album") : L(@"Apple Music playlist");
+            type = [self.playlist.playlistId hasPrefix:@"album:"] || [self.playlist.playlistId hasPrefix:@"libalbum:"] ? L(@"Apple Music album") : L(@"Apple Music playlist");
             NSMutableArray *bits = [NSMutableArray array];
             if (self.playlist.author.length) [bits addObject:self.playlist.author];
             NSUInteger n = self.tracks.count ?: (NSUInteger)self.playlist.trackCount;
@@ -243,6 +271,21 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
             description = self.playlist.descriptionText;
             canSave = !self.playlist.fromLibrary;
             saved = [[TNLibrary shared] isSavedPlaylist:self.playlist];
+            break;
+        }
+        case TNListOwn: {
+            type = L(@"Your playlist");
+            NSMutableArray *bits = [NSMutableArray array];
+            if (self.playlist.author.length) [bits addObject:self.playlist.author];
+            [bits addObject:[NSString stringWithFormat:L(@"%lu songs"), (unsigned long)self.tracks.count]];
+            info = [bits componentsJoinedByString:@" • "];
+            description = self.playlist.descriptionText;
+            break;
+        }
+        case TNListDownloads: {
+            TNDownloads *downloads = [TNDownloads shared];
+            info = [NSString stringWithFormat:L(@"%lu songs • %@"), (unsigned long)self.tracks.count, [TNUtils formatFileSize:[downloads bytesUsed]]];
+            if (downloads.waitingCount) description = downloads.state;
             break;
         }
         case TNListLiked:
@@ -258,6 +301,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     self.descriptionLinks = [TNExternalOpen linksInText:description];
     if (self.kind == TNListLiked) self.cover.image = [self badgeArtwork:TNIconThumbUpFilled];
     else if (self.kind == TNListRecent) self.cover.image = [self badgeArtwork:TNIconClock];
+    else if (self.kind == TNListDownloads) self.cover.image = [self badgeArtwork:TNIconDownload];
     else {
         NSString *url = [self imageURL];
         [self.cover setImageURL:url placeholder:[theme artPlaceholderWithSize:160]];
@@ -356,7 +400,13 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     CGFloat pw = [theme widthForButton:self.playButton minimum:100], sw = [theme widthForButton:self.shuffleButton minimum:100];
     self.playButton.frame = CGRectMake(bx, by, pw, 32);
     self.shuffleButton.frame = CGRectMake(bx + pw + 10, by, sw, 32);
-    self.saveButton.frame = CGRectMake(bx + pw + sw + 20, by, [theme widthForButton:self.saveButton minimum:100], 32);
+    CGFloat mx = bx + pw + sw + 20;
+    if (!self.saveButton.hidden) {
+        CGFloat vw = [theme widthForButton:self.saveButton minimum:100];
+        self.saveButton.frame = CGRectMake(mx, by, vw, 32);
+        mx += vw + 10;
+    }
+    self.moreButton.frame = CGRectMake(mx, by, 44, 32);
     CGFloat height = MAX(by + 32, pad + art) + pad;
     self.header.frame = CGRectMake(0, 0, w, height);
     self.tableView.tableHeaderView = self.header;
@@ -397,6 +447,16 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
         case TNListRecent:
             [self setTracksAndMatch:[[TNLibrary shared] recentTracks]];
             [self finishLoadingWithError:nil empty:!self.tracks.count emptyMessage:L(@"Songs you play show up here.")];
+            [self showHeader];
+            return;
+        case TNListOwn:
+            [self setTracksAndMatch:[[TNLibrary shared] tracksOfPlaylist:self.playlist]];
+            [self finishLoadingWithError:nil empty:!self.tracks.count emptyMessage:L(@"Add songs with \"Add to playlist…\" in a song's menu.")];
+            [self showHeader];
+            return;
+        case TNListDownloads:
+            [self setTracksAndMatch:[[TNDownloads shared] downloadedTracks]];
+            [self finishLoadingWithError:nil empty:!self.tracks.count emptyMessage:[TNDownloads shared].waitingCount ? [TNDownloads shared].state : L(@"Songs you download play without the internet. Download them from a song's menu or a whole album or playlist with its \"…\" button.")];
             [self showHeader];
             return;
         case TNListApple: {
@@ -495,6 +555,64 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     [[TNPlayer shared] playTracksShuffled:self.tracks contextURI:self.contextURI contextName:self.listTitle];
 }
 
+// The "…" of the list: the whole list next or into the queue, into a playlist, downloaded; an own playlist is renamed,
+// edited or deleted here
+- (void)listActions
+{
+    NSArray *tracks = self.tracks;
+    TNActionSheet *sheet = [[TNActionSheet alloc] initWithTitle:self.listTitle];
+    TNPlayer *player = [TNPlayer shared];
+    if (tracks.count) {
+        [sheet addButton:L(@"Play next") action:^{ [player playNextTracks:tracks]; [TNRouter toast:L(@"Plays next")]; }];
+        [sheet addButton:L(@"Add to queue") action:^{ [player addTracksToQueue:tracks]; [TNRouter toast:L(@"Added to queue")]; }];
+        if (self.kind != TNListOwn) [sheet addButton:L(@"Add to playlist…") action:^{ [TNRouter addTracksToPlaylist:tracks]; }];
+    }
+    TNDownloads *downloads = [TNDownloads shared];
+    NSUInteger downloaded = 0;
+    for (TNTrack *t in tracks) if ([downloads isDownloaded:t]) downloaded++;
+    if (self.kind != TNListDownloads && tracks.count && downloaded < tracks.count) {
+        [sheet addButton:L(@"Download all") action:^{ [TNRouter downloadTracks:tracks]; }];
+    }
+    if (self.kind == TNListDownloads && downloads.waitingCount) {
+        [sheet addButton:L(@"Stop downloading") action:^{ [downloads cancelPending]; }];
+    }
+    __weak TNTrackListViewController *weakSelf = self;
+    if (self.kind == TNListOwn) {
+        [sheet addButton:L(@"Edit") action:^{ [weakSelf toggleEditing]; }];
+        [sheet addButton:L(@"Rename") action:^{
+            TNTrackListViewController *me = weakSelf;
+            [TNRouter promptWithTitle:L(@"Rename the playlist") message:nil text:me.playlist.name placeholder:L(@"Name") button:L(@"Rename") completion:^(NSString *name) {
+                if (!name.length) return;
+                [[TNLibrary shared] renamePlaylist:me.playlist to:name];
+                me.listTitle = name;
+                [me showHeader];
+            }];
+        }];
+        [sheet addDestructiveButton:L(@"Delete the playlist") action:^{
+            TNTrackListViewController *me = weakSelf;
+            [[TNLibrary shared] deletePlaylist:me.playlist];
+            [TNRouter toast:L(@"Playlist deleted")];
+            [me.navigationController popViewControllerAnimated:YES];
+        }];
+    } else if (downloaded) {
+        NSString *title = self.kind == TNListDownloads ? L(@"Remove all downloads") : L(@"Remove the downloads");
+        [sheet addDestructiveButton:title action:^{
+            if (weakSelf.kind == TNListDownloads) [downloads removeAll];
+            else for (TNTrack *t in tracks) [downloads remove:t];
+            [TNRouter toast:L(@"Downloads removed")];
+        }];
+    }
+    [sheet showFromView:self.moreButton inController:self];
+}
+
+- (void)toggleEditing
+{
+    BOOL editing = !self.tableView.editing;
+    [self.tableView setEditing:editing animated:YES];
+    self.navigationItem.rightBarButtonItem = editing ? [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(toggleEditing)] : nil;
+    if (!editing) [self load];
+}
+
 - (void)toggleSaved
 {
     TNLibrary *library = [TNLibrary shared];
@@ -524,7 +642,48 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     [cell.moreButton removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
     [cell.moreButton addTarget:self action:@selector(moreTapped:) forControlEvents:UIControlEventTouchUpInside];
     cell.moreButton.tag = indexPath.row;
+    cell.showsReorderControl = self.kind == TNListOwn;
     return cell;
+}
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return self.kind == TNListOwn || self.kind == TNListDownloads;
+}
+
+- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath { return self.kind == TNListOwn; }
+
+- (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath { return L(@"Remove"); }
+
+- (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)from toIndexPath:(NSIndexPath *)to
+{
+    NSMutableArray *tracks = [self.tracks mutableCopy];
+    id t = tracks[(NSUInteger)from.row];
+    [tracks removeObjectAtIndex:(NSUInteger)from.row];
+    [tracks insertObject:t atIndex:(NSUInteger)to.row];
+    self.tracks = tracks;
+    [[TNLibrary shared] setTracks:tracks ofPlaylist:self.playlist];
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (editingStyle != UITableViewCellEditingStyleDelete) return;
+    [self removeTrackAt:(NSUInteger)indexPath.row];
+}
+
+- (void)removeTrackAt:(NSUInteger)row
+{
+    if (row >= self.tracks.count) return;
+    TNTrack *t = self.tracks[row];
+    NSMutableArray *tracks = [self.tracks mutableCopy];
+    [tracks removeObjectAtIndex:row];
+    self.mutating = YES;   // (the change notifications leave the rows alone meanwhile)
+    self.tracks = tracks;
+    if (self.kind == TNListOwn) [[TNLibrary shared] setTracks:tracks ofPlaylist:self.playlist];
+    else if (self.kind == TNListDownloads) [[TNDownloads shared] remove:t];
+    self.mutating = NO;
+    [self.tableView deleteRowsAtIndexPaths:@[ [NSIndexPath indexPathForRow:(NSInteger)row inSection:0] ] withRowAnimation:UITableViewRowAnimationFade];
+    [self showHeader];
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
@@ -545,7 +704,16 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (void)moreTapped:(UIButton *)sender
 {
     if (sender.tag < 0 || sender.tag >= (NSInteger)self.tracks.count) return;
-    [TNRouter showActionsForTrack:self.tracks[(NSUInteger)sender.tag] fromView:sender inController:self];
+    TNTrack *t = self.tracks[(NSUInteger)sender.tag];
+    if (self.kind == TNListOwn) {
+        __weak TNTrackListViewController *weakSelf = self;
+        [TNRouter showActionsForTrack:t fromView:sender inController:self removeTitle:L(@"Remove from this playlist") remove:^{
+            NSUInteger row = [weakSelf.tracks indexOfObjectIdenticalTo:t];
+            if (row != NSNotFound) [weakSelf removeTrackAt:row];
+        }];
+        return;
+    }
+    [TNRouter showActionsForTrack:t fromView:sender inController:self];
 }
 
 @end

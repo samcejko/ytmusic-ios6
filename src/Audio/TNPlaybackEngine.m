@@ -5,6 +5,9 @@
 #import "TNStreams.h"
 #import "TNMatcher.h"
 #import "TNModels.h"
+#import "TNDownloads.h"
+#import "TNReachability.h"
+#import "TNSettings.h"
 #import "TNCommon.h"
 
 static const NSUInteger TNChunkFrames = 4096;
@@ -19,9 +22,21 @@ static const NSUInteger TNChunkFrames = 4096;
 
 + (TNPlaybackItem *)loadTrack:(TNTrack *)track error:(NSError **)error
 {
+    // a downloaded song plays from the disk, whatever the network does
+    NSDictionary *local = [[TNDownloads shared] localFileFor:track];
+    if (local) {
+        TNPlaybackItem *item = [self itemForTrack:track file:[[TNAudioFile alloc] initWithLocalPath:local[@"path"]]
+                                       durationMs:TNInt(local[@"ms"]) loudness:TNDbl(local[@"loud"]) error:NULL];
+        if (item) {
+            item.videoId = TNStr(local[@"videoId"]);
+            item.formatName = [item.formatName stringByAppendingString:L(@", downloaded")];
+            TNLog(@"loaded %@ from the device: %@", track.name, item.formatName);
+            return item;
+        }
+    }
     NSString *videoId = track.videoId;
     if (!videoId.length && [track isApple]) {
-        // an Apple Music song plays as its YouTube twin
+        // an Apple Music (or Spotify) song plays as its YouTube twin
         NSError *matchError = nil;
         videoId = [[TNMatcher shared] videoIdForTrackSync:track error:&matchError];
         if (!videoId.length) {
@@ -37,15 +52,20 @@ static const NSUInteger TNChunkFrames = 4096;
     NSString *known = [matcher knownAlternativeFor:videoId];
     NSString *original = videoId;
     if (known) videoId = known;
+    BOOL low = [TNSettings dataSaver] && [TNReachability onCellular];
     NSError *last = nil;
     NSInteger status = 0, ms = 0;
-    TNPlaybackItem *item = [self openVideo:videoId track:track status:&status durationMs:&ms error:&last];
+    TNPlaybackItem *item = [self openVideo:videoId track:track lowQuality:low status:&status durationMs:&ms error:&last];
+    if (!item && low && last.code != TNErrorRefused) {
+        // (the small HE-AAC version would not decode here: the usual one)
+        item = [self openVideo:videoId track:track lowQuality:NO status:&status durationMs:&ms error:&last];
+    }
     // YouTube serves some songs' audio in full only with a proof-of-origin token this app lacks (403 on the whole
     // file): another upload of the same recording plays instead, and is remembered for the next time
     if (!item && (status == 403 || status == 404 || status == 410) && last.code != TNErrorRefused) {
         for (NSString *alternative in [matcher alternativesFor:track excluding:videoId durationMs:ms]) {
             NSError *e = nil;
-            item = [self openVideo:alternative track:track status:&status durationMs:NULL error:&e];
+            item = [self openVideo:alternative track:track lowQuality:low status:&status durationMs:NULL error:&e];
             if (item) {
                 [matcher rememberAlternative:alternative for:original];
                 TNLog(@"%@: %@ is not served in full, %@ plays instead", track.name, videoId, alternative);
@@ -58,24 +78,24 @@ static const NSUInteger TNChunkFrames = 4096;
         if (error) *error = last ?: TNMakeError(TNErrorPlayback, L(@"The song could not be downloaded."));
         return nil;
     }
-    TNLog(@"loaded %@ (%@): %@, %d Hz", track.name, item.videoId, item.formatName, item.decoder.sampleRate);
+    TNLog(@"loaded %@ (%@): %@, %d Hz, gain %.2f", track.name, item.videoId, item.formatName, item.decoder.sampleRate, item.gain);
     return item;
 }
 
 // One video's audio: its address from YouTube, the download started, the header read
-+ (TNPlaybackItem *)openVideo:(NSString *)videoId track:(TNTrack *)track status:(NSInteger *)status durationMs:(NSInteger *)durationOut error:(NSError **)error
++ (TNPlaybackItem *)openVideo:(NSString *)videoId track:(TNTrack *)track lowQuality:(BOOL)low status:(NSInteger *)status
+                   durationMs:(NSInteger *)durationOut error:(NSError **)error
 {
-    NSInteger ms = 0;
     NSError *e = nil;
     if (status) *status = 0;
-    NSString *url = [TNStreams audioURLForVideo:videoId durationMs:&ms error:&e];
-    if (durationOut) *durationOut = ms;
-    if (!url) {
+    TNAudioSource *source = [TNStreams audioForVideo:videoId lowQuality:low error:&e];
+    if (durationOut) *durationOut = source.durationMs;
+    if (!source.url.length) {
         if (error) *error = e;
         return nil;
     }
-    NSInteger durationMs = ms ?: track.durationMs;
-    TNPlaybackItem *item = [self itemForTrack:track url:url durationMs:durationMs error:&e];
+    TNPlaybackItem *item = [self itemForTrack:track file:[[TNAudioFile alloc] initWithURL:source.url]
+                                   durationMs:source.durationMs ?: track.durationMs loudness:source.loudnessDb error:&e];
     if (!item) {
         NSInteger s = e.code >= 400 ? e.code : 0;
         if (status) *status = s;
@@ -86,12 +106,19 @@ static const NSUInteger TNChunkFrames = 4096;
     item.videoId = videoId;
     return item;
 }
+
 + (TNPlaybackItem *)itemForTrack:(TNTrack *)track url:(NSString *)url durationMs:(NSInteger)durationMs error:(NSError **)error
+{
+    return [self itemForTrack:track file:[[TNAudioFile alloc] initWithURL:url] durationMs:durationMs loudness:0 error:error];
+}
+
++ (TNPlaybackItem *)itemForTrack:(TNTrack *)track file:(TNAudioFile *)file durationMs:(NSInteger)durationMs loudness:(double)loudnessDb
+                           error:(NSError **)error
 {
     TNPlaybackItem *item = [[TNPlaybackItem alloc] init];
     item.track = track;
-    item.gain = 1;
-    TNAudioFile *file = [[TNAudioFile alloc] initWithURL:url];
+    // (YouTube's loudness: how much louder than its target the song is; louder songs are turned down, none up)
+    item.gain = [TNSettings normalize] && loudnessDb > 0 ? (float)pow(10.0, -loudnessDb / 20.0) : 1.f;
     [file start];
     TNAACDecoder *decoder = [[TNAACDecoder alloc] initWithFile:file];
     NSError *e = nil;
@@ -107,10 +134,10 @@ static const NSUInteger TNChunkFrames = 4096;
     decoder.totalFrames = (uint64_t)item.durationMs * (uint64_t)rate / 1000;
     NSInteger bitrate = decoder.bitrate;
     if (bitrate <= 0 && file.length && item.durationMs > 0) bitrate = (NSInteger)((double)file.length * 8000.0 / (double)item.durationMs);
-    item.formatName = bitrate > 0 ? [NSString stringWithFormat:@"AAC %ld kbit/s", (long)((bitrate + 500) / 1000)] : @"AAC";
+    item.formatName = [NSString stringWithFormat:@"%@%@", decoder.heAAC ? @"HE-AAC" : @"AAC",
+                       bitrate > 0 ? [NSString stringWithFormat:@" %ld kbit/s", (long)((bitrate + 500) / 1000)] : @""];
     return item;
 }
-
 - (void)cancel { [self.file cancel]; }
 
 @end
@@ -130,6 +157,8 @@ static const NSUInteger TNChunkFrames = 4096;
     uint64_t _framesWritten;            // into the output since its last flush
     BOOL _drained;                      // the last item is all decoded; finished once played
     TNAudioOutput *_output;
+    TNPlaybackItem *_fadeNext;          // crossfading: the next song coming in under the end of this one
+    uint64_t _fadeLength, _fadeDone;    // frames
 }
 
 + (instancetype)shared
@@ -169,6 +198,8 @@ static const NSUInteger TNChunkFrames = 4096;
     self.currentItem = item;
     TNPlaybackItem *oldNext = self.nextItem;
     self.nextItem = nil;
+    TNPlaybackItem *oldFade = _fadeNext;
+    _fadeNext = nil;
     _drained = NO;
     _framesWritten = 0;
     _pendingSeekMs = startMs > 0 ? startMs : -1;
@@ -181,6 +212,7 @@ static const NSUInteger TNChunkFrames = 4096;
     [_cond unlock];
     if (old != item) [old cancel];
     if (oldNext != item) [oldNext cancel];
+    if (oldFade && oldFade != item) [oldFade cancel];
     if (!paused) [_output play];
     [self.delegate engineDidStartItem:item];
 }
@@ -224,6 +256,12 @@ static const NSUInteger TNChunkFrames = 4096;
         dropped = _decodingItem;
         self.currentItem.askedForNext = NO;
     }
+    if (_fadeNext) {
+        // (a seek in the middle of a crossfade: the next song is loaded again when its time comes)
+        dropped = _fadeNext;
+        _fadeNext = nil;
+        self.currentItem.askedForNext = NO;
+    }
     _decodingItem = self.currentItem;
     _drained = NO;
     [_output flush];                      // wakes a writer waiting for room
@@ -239,6 +277,8 @@ static const NSUInteger TNChunkFrames = 4096;
     _generation++;
     old = self.currentItem;
     oldNext = self.nextItem;
+    TNPlaybackItem *oldFade = _fadeNext;
+    _fadeNext = nil;
     _decodingItem = nil;
     self.currentItem = nil;
     self.nextItem = nil;
@@ -247,6 +287,7 @@ static const NSUInteger TNChunkFrames = 4096;
     [_cond unlock];
     [old cancel];
     [oldNext cancel];
+    [oldFade cancel];
 }
 
 - (NSInteger)positionMs
@@ -304,6 +345,7 @@ static const NSUInteger TNChunkFrames = 4096;
 - (void)decodeLoop
 {
     int16_t *buffer = malloc(TNChunkFrames * 4);
+    int16_t *mix = malloc(TNChunkFrames * 4);
     while (YES) {
         @autoreleasepool {
             [_cond lock];
@@ -331,6 +373,8 @@ static const NSUInteger TNChunkFrames = 4096;
                 if (play) [_output play];
                 continue;
             }
+
+            if ([self crossfadeStep:item buffer:buffer mix:mix generation:generation outputGeneration:outputGeneration]) continue;
 
             NSInteger n = [item.decoder readFrames:buffer max:TNChunkFrames gain:item.gain];
             if (n > 0) {
@@ -372,6 +416,63 @@ static const NSUInteger TNChunkFrames = 4096;
             if (n == 0 && item.decoder.starved) usleep(20000);
         }
     }
+}
+
+// Crossfading (Settings): once the song is within the fade's length of its end and the next one is ready, both are
+// decoded and mixed (equal power) until this one ends; the next one then simply goes on. YES when this step was a fade.
+- (BOOL)crossfadeStep:(TNPlaybackItem *)item buffer:(int16_t *)buffer mix:(int16_t *)mix generation:(uint64_t)generation outputGeneration:(uint64_t)outputGeneration
+{
+    NSInteger seconds = [TNSettings crossfadeSeconds];
+    TNPlaybackItem *fade;
+    [_cond lock];
+    if (!_fadeNext && seconds > 0 && generation == _generation && _decodingItem == item) {
+        TNPlaybackItem *next = self.nextItem;
+        uint64_t rate = (uint64_t)(item.decoder.sampleRate ?: 44100);
+        uint64_t total = item.decoder.totalFrames, length = (uint64_t)seconds * rate;
+        if (next && next.decoder.sampleRate == item.decoder.sampleRate && total > length * 3 && item.decoder.frame + length >= total) {
+            self.nextItem = nil;
+            _fadeNext = next;
+            _fadeLength = MAX((uint64_t)1, total - item.decoder.frame);
+            _fadeDone = 0;
+            next.outputStart = _framesWritten;
+            next.baseFrame = next.decoder.frame;
+        }
+    }
+    fade = _fadeNext;
+    [_cond unlock];
+    if (!fade) return NO;
+    NSInteger n = [item.decoder readFrames:buffer max:TNChunkFrames gain:item.gain];
+    if (n > 0) {
+        NSInteger m = [fade.decoder readFrames:mix max:(NSUInteger)n gain:fade.gain];
+        if (m < 0) m = 0;
+        if (m < n) memset(mix + m * 2, 0, (size_t)(n - m) * 4);
+        for (NSInteger i = 0; i < n; i++) {
+            float p = (float)(_fadeDone + (uint64_t)i) / (float)_fadeLength;
+            if (p > 1.f) p = 1.f;
+            float a = sqrtf(1.f - p), b = sqrtf(p);
+            for (int c = 0; c < 2; c++) {
+                float v = (float)buffer[i * 2 + c] * a + (float)mix[i * 2 + c] * b;
+                buffer[i * 2 + c] = (int16_t)(v > 32767.f ? 32767.f : (v < -32768.f ? -32768.f : v));
+            }
+        }
+        _fadeDone += (uint64_t)n;
+        NSUInteger written = [_output write:buffer count:(NSUInteger)n generation:outputGeneration];
+        [_cond lock];
+        if (generation == _generation && outputGeneration == _output.generation) _framesWritten += written;
+        [_cond unlock];
+    }
+    if (n < 0 || item.decoder.atEnd || _fadeDone >= _fadeLength) {
+        // this song is over: the next one goes on by itself
+        [_cond lock];
+        if (generation == _generation && _decodingItem == item && _fadeNext == fade) {
+            _decodingItem = fade;
+            _fadeNext = nil;
+        }
+        [_cond unlock];
+    } else if (n == 0 && item.decoder.starved) {
+        usleep(20000);
+    }
+    return YES;
 }
 
 - (NSString *)debugState
