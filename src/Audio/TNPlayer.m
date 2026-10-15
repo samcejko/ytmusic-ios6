@@ -336,8 +336,8 @@ static void TNShuffleArray(NSMutableArray *a)
     TNLog(@"cannot play %@: %@", track.name, error.localizedDescription);
     [[NSNotificationCenter defaultCenter] postNotificationName:TNPlayerDidFailNotification object:self
                                                       userInfo:@{ @"error": error ?: TNMakeError(TNErrorPlayback, L(@"This song cannot be played.")) }];
-    // (without the audio helper no song plays: skipping through the list would only fail on every one)
-    if (++_failures >= TNMaxSkipsOnError || error.code == TNErrorHelper) {
+    // (when YouTube turns the app away no song plays: skipping through the list would only fail on every one)
+    if (++_failures >= TNMaxSkipsOnError || error.code == TNErrorRefused) {
         self.playing = NO;
         [self changed];
         return;

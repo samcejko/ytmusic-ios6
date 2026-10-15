@@ -80,7 +80,7 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     NSDictionary *json = TNDict([TNUtils JSONObjectFromData:r.responseBody]);
     if (r.statusCode != 200 || !json) {
         *refused = YES;
-        if (error) *error = TNMakeError(TNErrorHelper, [NSString stringWithFormat:L(@"YouTube answered with an error (HTTP %ld)."), (long)r.statusCode]);
+        if (error) *error = TNMakeError(TNErrorRefused, [NSString stringWithFormat:L(@"YouTube answered with an error (HTTP %ld)."), (long)r.statusCode]);
         return nil;
     }
     NSDictionary *playability = TNDict(json[@"playabilityStatus"]);
@@ -88,7 +88,7 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     if (![status isEqualToString:@"OK"]) {
         NSString *reason = TNStr(playability[@"reason"]) ?: status;
         *refused = [status isEqualToString:@"LOGIN_REQUIRED"] || [[reason lowercaseString] rangeOfString:@"bot"].location != NSNotFound;
-        if (error) *error = TNMakeError(*refused ? TNErrorHelper : TNErrorRestricted, reason);
+        if (error) *error = TNMakeError(*refused ? TNErrorRefused : TNErrorRestricted, reason);
         return nil;
     }
     NSDictionary *streaming = TNDict(json[@"streamingData"]);
@@ -103,60 +103,11 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     }
     // no plain address at all: the API changed for this client
     *refused = YES;
-    if (error) *error = TNMakeError(TNErrorHelper, L(@"YouTube offers no sound this player knows for this song."));
+    if (error) *error = TNMakeError(TNErrorRefused, L(@"YouTube offers no sound this player knows for this song."));
     return nil;
 }
 
-#pragma mark - The helper
-
-+ (NSDictionary *)helperSync:(NSString *)videoId error:(NSError **)error
-{
-    NSString *base = [TNSettings resolverBase];
-    if (!base.length) {
-        if (error) *error = nil;
-        return nil;
-    }
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/resolve?id=%@", base, [TNUtils urlEncode:videoId]]];
-    NSError *failure = nil;
-    for (int attempt = 0; attempt < 2; attempt++) {
-        TNHTTPRequest *r = [[TNHTTPRequest alloc] initWithMethod:@"GET" URL:url];
-        r.headers = @{ @"Accept": @"application/json" };
-        r.connectTimeout = 15;
-        r.readTimeout = 45;   // (the helper asks YouTube itself: a few seconds)
-        r.verifyTLS = [TNSettings verifyTLS];
-        r.highPriority = YES;
-        __block NSError *requestError = nil;
-        r.onComplete = ^(NSError *e) { requestError = e; };
-        [r runSynchronously];
-        if (requestError) {
-            failure = TNMakeError(TNErrorHelper, [NSString stringWithFormat:@"%@ (%@)", L(@"The audio helper could not be reached."), requestError.localizedDescription]);
-            usleep(300000);
-            continue;
-        }
-        NSDictionary *j = TNDict([TNUtils JSONObjectFromData:r.responseBody]);
-        if (r.statusCode == 200 && j) {
-            NSString *audio = TNStr(TNDict(j[@"formats"])[@"140"]);
-            if (!audio.length) {
-                if (error) *error = TNMakeError(TNErrorPlayback, L(@"YouTube offers no sound this player knows for this song."));
-                return nil;
-            }
-            NSInteger ms = (NSInteger)(TNDbl(j[@"duration"]) * 1000);
-            if (!ms) ms = (NSInteger)([TNQueryValue(audio, @"dur") doubleValue] * 1000);
-            return @{ @"url": audio, @"ms": @(ms) };
-        }
-        NSString *message = TNStr(j[@"error"]) ?: TNStr(j[@"detail"]);
-        // (the helper or its tunnel down: no song will play through it; an answer about this one song: the next may)
-        BOOL helperDown = r.statusCode >= 500 || !j;
-        failure = TNMakeError(helperDown ? TNErrorHelper : TNErrorPlayback,
-                              message.length ? [NSString stringWithFormat:L(@"The audio helper: %@"), message]
-                                             : [NSString stringWithFormat:L(@"The audio helper answered with HTTP %ld."), (long)r.statusCode]);
-        if (!helperDown) break;
-    }
-    if (error) *error = failure;
-    return nil;
-}
-
-#pragma mark - Both
+#pragma mark - The address
 
 + (NSString *)audioURLForVideo:(NSString *)videoId durationMs:(NSInteger *)durationMs error:(NSError **)error
 {
@@ -170,7 +121,7 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         if (durationMs) *durationMs = [cached[@"ms"] integerValue];
         return cached[@"url"];
     }
-    // 1. straight from YouTube (a stale visitor id is renewed once)
+    // (a stale visitor id is renewed once)
     BOOL refused = NO;
     NSError *directError = nil;
     NSString *visitor = [TNYTMusic visitorData] ?: [TNYTMusic freshVisitorDataSync];
@@ -179,27 +130,16 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         visitor = [TNYTMusic freshVisitorDataSync];
         found = [self directSync:videoId visitorData:visitor refused:&refused error:&directError];
     }
-    NSString *via = @"YouTube";
-    // 2. the helper, when YouTube would not
-    NSError *helperError = nil;
     if (!found) {
-        TNLog(@"direct audio for %@ failed: %@", videoId, directError.localizedDescription);
-        found = [self helperSync:videoId error:&helperError];
-        via = @"the helper";
-    }
-    if (!found) {
-        // a reason about this song (removed, region) skips to the next one; YouTube refusing the app altogether
-        // (and no helper to step in) stops the playback
-        NSError *e = directError && !refused ? directError : (helperError ?: directError);
-        if (!e) e = TNMakeError(TNErrorHelper, L(@"YouTube did not give the sound right now. Try again later."));
-        if (error) *error = e;
+        // a reason about this song (removed, region) skips to the next one; YouTube refusing the app altogether stops
+        if (error) *error = directError ?: TNMakeError(TNErrorRefused, L(@"YouTube did not give the sound right now. Try again later."));
         return nil;
     }
     NSString *url = found[@"url"];
     NSInteger ms = [found[@"ms"] integerValue];
     [self remember:url durationMs:ms forVideo:videoId];
     if (durationMs) *durationMs = ms;
-    TNLog(@"audio of %@ from %@: %.0f s", videoId, via, ms / 1000.0);
+    TNLog(@"audio of %@: %.0f s", videoId, ms / 1000.0);
     return url;
 }
 

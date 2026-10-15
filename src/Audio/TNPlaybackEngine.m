@@ -40,9 +40,9 @@ static const NSUInteger TNChunkFrames = 4096;
     NSError *last = nil;
     NSInteger status = 0, ms = 0;
     TNPlaybackItem *item = [self openVideo:videoId track:track status:&status durationMs:&ms error:&last];
-    // YouTube serves some songs' audio in full only with a proof-of-origin token the helper lacks (403 on the whole
+    // YouTube serves some songs' audio in full only with a proof-of-origin token this app lacks (403 on the whole
     // file): another upload of the same recording plays instead, and is remembered for the next time
-    if (!item && (status == 403 || status == 404 || status == 410) && last.code != TNErrorHelper) {
+    if (!item && (status == 403 || status == 404 || status == 410) && last.code != TNErrorRefused) {
         for (NSString *alternative in [matcher alternativesFor:track excluding:videoId durationMs:ms]) {
             NSError *e = nil;
             item = [self openVideo:alternative track:track status:&status durationMs:NULL error:&e];
@@ -51,7 +51,7 @@ static const NSUInteger TNChunkFrames = 4096;
                 TNLog(@"%@: %@ is not served in full, %@ plays instead", track.name, videoId, alternative);
                 break;
             }
-            if (e.code == TNErrorHelper) { last = e; break; }
+            if (e.code == TNErrorRefused) { last = e; break; }
         }
     }
     if (!item) {
@@ -62,7 +62,7 @@ static const NSUInteger TNChunkFrames = 4096;
     return item;
 }
 
-// One video's audio: its address from the helper, the download started, the header read
+// One video's audio: its address from YouTube, the download started, the header read
 + (TNPlaybackItem *)openVideo:(NSString *)videoId track:(TNTrack *)track status:(NSInteger *)status durationMs:(NSInteger *)durationOut error:(NSError **)error
 {
     NSInteger ms = 0;

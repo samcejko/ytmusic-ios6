@@ -19,11 +19,10 @@ playlists** too, in the skeuomorphic look of the iOS 6 years. English and Czech.
 ## How it works
 
 - Browsing: YouTube Music's own web API (`music.youtube.com/youtubei/v1`, client `WEB_REMIX`).
-- Sound: straight from YouTube, no server needed. The player API asked as YouTube's visionOS app, with the visitor id
-  YouTube Music hands out, answers with audio addresses that serve the whole file (to the device's own connection, so it
-  works anywhere). Only when YouTube refuses, the optional audio helper of the family (yt-dlp on a Raspberry Pi,
-  `/yt/resolve`, the one Tubie uses) is asked. When one upload's audio is still not served in full, another upload of the
-  same recording plays (and is remembered). Muzika downloads the AAC audio (itag 140, fragmented MP4), reads the MP4 boxes
+- Sound: straight from YouTube, no server of ours in between. The player API asked as YouTube's visionOS app, with the
+  visitor id YouTube Music hands out, answers with audio addresses that serve the whole file to the device's own
+  connection (so it works anywhere). When one upload's audio is still not served in full, another upload of the same
+  recording plays (and is remembered). Muzika downloads the AAC audio (itag 140, fragmented MP4), reads the MP4 boxes
   itself and decodes with the system's AudioConverter.
 - Apple Music: the API `music.apple.com` itself uses, with the web player's developer token (read from its script,
   renewed by itself) and your own `media-user-token` cookie. The token is sent from a computer's browser through a

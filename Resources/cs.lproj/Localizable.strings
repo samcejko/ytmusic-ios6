@@ -49,7 +49,6 @@
 "Nothing here." = "Nic tu není.";
 "Nothing playing" = "Nic nehraje";
 "Now playing" = "Právě hraje";
-"Off" = "Vypnuto";
 "OK" = "OK";
 "Open in %@" = "Otevřít v aplikaci %@";
 "Open in Safari" = "Otevřít v Safari";
@@ -112,7 +111,6 @@
 "Added to your albums" = "Přidáno do tvých alb";
 "Added to your artists" = "Přidáno do tvých interpretů";
 "Added to your playlists" = "Přidáno do tvých playlistů";
-"Address" = "Adresa";
 "All" = "Vše";
 "All %lu songs found on YouTube" = "Všechny skladby (%lu) jsou na YouTube";
 "All Apple playlists" = "Všechny playlisty Apple";
@@ -134,7 +132,6 @@
 "Apple Music: %@ - %@ (%@). Pick what should play for it." = "Apple Music: %@ - %@ (%@). Vyber, co se za ni má hrát.";
 "Apple Music's web player could not be read (it may have changed)." = "Webový přehrávač Apple Music nejde přečíst (možná se změnil).";
 "Artists you save show up here." = "Tady budou interpreti, které si uložíš.";
-"Audio helper" = "Pomocník pro zvuk";
 "Autoplay: when your music runs out, the radio of the last song keeps playing." = "Automatické přehrávání: když hudba dohraje, pokračuje rádio poslední skladby.";
 "Checking the token with Apple…" = "Ověřuju token u Apple…";
 "Choose the YouTube version" = "Vybrat verzi z YouTube";
@@ -146,7 +143,6 @@
 "Connect your Apple Music library: its playlists show up here and play from YouTube Music. Or import a public playlist or album by its link." = "Připoj svou knihovnu Apple Music: její playlisty se objeví tady a budou hrát z YouTube Music. Nebo importuj veřejný playlist či album přes odkaz.";
 "Connected" = "Připojeno";
 "Copy the value of the cookie media-user-token." = "Zkopíruj hodnotu cookie media-user-token.";
-"Default" = "Výchozí";
 "Disconnect" = "Odpojit";
 "Disconnect Apple Music?" = "Odpojit Apple Music?";
 "Explore" = "Objevovat";
@@ -194,9 +190,6 @@
 "Sync now" = "Synchronizovat";
 "Synced %@" = "Synchronizováno %@";
 "Syncing…" = "Synchronizuju…";
-"The audio helper answered with HTTP %ld." = "Pomocník pro zvuk odpověděl HTTP %ld.";
-"The audio helper could not be reached." = "Pomocník pro zvuk není dostupný.";
-"The audio helper: %@" = "Pomocník pro zvuk: %@";
 "The link could not be imported." = "Odkaz nešlo importovat.";
 "The song's address is not valid." = "Adresa skladby není platná.";
 "The song's file is not one this player knows." = "Soubor skladby tenhle přehrávač nezná.";
@@ -204,7 +197,6 @@
 "The sound could not be decoded (AAC error %d)." = "Zvuk nešlo dekódovat (chyba AAC %d).";
 "The synced playlists leave this device. The songs found on YouTube are remembered." = "Synchronizované playlisty z tohoto zařízení zmizí. Nalezené verze z YouTube zůstanou zapamatované.";
 "The token goes straight to your device on this network and is kept only there." = "Token jde přímo do tvého zařízení v této síti a zůstává jen tam.";
-"The Unlicense: it runs on the audio helper (not in the app) and finds the full-length audio." = "The Unlicense: běží na pomocníkovi pro zvuk (ne v aplikaci) a hledá zvuk celých skladeb.";
 "This device is not on a Wi-Fi network: paste the token below." = "Zařízení není na Wi-Fi: vlož token níže.";
 "This does not look like a media-user-token." = "Tohle nevypadá jako media-user-token.";
 "This is no link to an Apple Music playlist or album." = "Tohle není odkaz na playlist ani album z Apple Music.";
@@ -227,8 +219,5 @@
 "YouTube Music is not answering right now. Try again in a moment." = "YouTube Music teď neodpovídá. Zkus to za chvíli.";
 "YouTube offers no sound this player knows for this song." = "YouTube k této skladbě nemá zvuk, který tenhle přehrávač zná.";
 "YouTube version" = "Verze z YouTube";
-"Audio helper (fallback)" = "Pomocník pro zvuk (záloha)";
-"Muzika takes the sound straight from YouTube. The helper (yt-dlp on a Raspberry Pi, the one Tubie uses) is asked only when YouTube refuses; empty: no helper." = "Muzika bere zvuk přímo z YouTube. Pomocníka (yt-dlp na Raspberry Pi, stejný jako pro Tubie) se ptá, jen když YouTube odmítne; prázdné: žádný pomocník.";
-"The address of the helper Muzika asks when YouTube refuses the sound (empty: none)." = "Adresa pomocníka, kterého se Muzika ptá, když YouTube zvuk odmítne (prázdné: žádný).";
 "YouTube answered with an error (HTTP %ld)." = "YouTube odpověděl chybou (HTTP %ld).";
 "YouTube did not give the sound right now. Try again later." = "YouTube teď zvuk nedal. Zkus to později.";

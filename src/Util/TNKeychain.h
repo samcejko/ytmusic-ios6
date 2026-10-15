@@ -1,6 +1,6 @@
 #import <Foundation/Foundation.h>
 
-// The server key (shared secret for the Pi helper) in the keychain, with a preferences fallback when the
+// Small secrets (the Apple Music token) in the keychain, with a preferences fallback when the
 // keychain refuses (no entitlement). Small strings only.
 @interface TNKeychain : NSObject
 + (NSString *)stringForKey:(NSString *)key;

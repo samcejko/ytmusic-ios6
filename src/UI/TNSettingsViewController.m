@@ -72,10 +72,8 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
     text.indicatorStyle = UIScrollViewIndicatorStyleWhite;
     text.text = [NSString stringWithFormat:@"%@\n\n"
                  "Mbed TLS (Arm Limited and contributors)\nApache License 2.0\n\n"
-                 "yt-dlp (the yt-dlp contributors)\n%@\n\n"
                  "%@",
                  L(@"Muzika is built with these, thank you:"),
-                 L(@"The Unlicense: it runs on the audio helper (not in the app) and finds the full-length audio."),
                  L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple. YouTube Music is a trademark of Google LLC, Apple Music a trademark of Apple Inc.")];
     [self.view addSubview:text];
 }
@@ -84,7 +82,7 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
 
 #pragma mark - Settings
 
-enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCount };
+enum { TNSetApple, TNSetPlayback, TNSetStorage, TNSetAbout, TNSetCount };
 
 @interface TNSettingsViewController () <UIAlertViewDelegate>
 @property (nonatomic, copy) NSString *cacheSize;
@@ -131,7 +129,6 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
     switch (section) {
         case TNSetApple: return [[TNAppleMusic shared] connected] ? 4 : 2;
         case TNSetPlayback: return 3;
-        case TNSetHelper: return 1;
         case TNSetStorage: return 3;
         case TNSetAbout: return 3;
     }
@@ -143,7 +140,6 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
     switch (section) {
         case TNSetApple: return L(@"Apple Music");
         case TNSetPlayback: return L(@"Playback");
-        case TNSetHelper: return L(@"Audio helper (fallback)");
         case TNSetStorage: return L(@"Storage");
         case TNSetAbout: return L(@"About");
     }
@@ -155,7 +151,6 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
     switch (section) {
         case TNSetApple: return L(@"Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu.");
         case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing.");
-        case TNSetHelper: return L(@"Muzika takes the sound straight from YouTube. The helper (yt-dlp on a Raspberry Pi, the one Tubie uses) is asked only when YouTube refuses; empty: no helper.");
         case TNSetAbout: return L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple.");
     }
     return nil;
@@ -246,14 +241,6 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
             if (row == 1) { cell.textLabel.text = L(@"Music videos for Apple songs"); cell.accessoryView = [self switchOn:[TNSettings allowVideosForApple] action:@selector(videosChanged:)]; }
             if (row == 2) { cell.textLabel.text = L(@"Find whole playlists at once"); cell.accessoryView = [self switchOn:[TNSettings matchWholePlaylists] action:@selector(matchAllChanged:)]; }
             break;
-        case TNSetHelper: {
-            NSString *base = [TNSettings resolverBase];
-            cell.textLabel.text = L(@"Address");
-            cell.detailTextLabel.text = base.length ? [[base stringByReplacingOccurrencesOfString:@"https://" withString:@""] stringByReplacingOccurrencesOfString:@"http://" withString:@""] : L(@"Off");
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            cell.selectionStyle = UITableViewCellSelectionStyleGray;
-            break;
-        }
         case TNSetStorage:
             if (row == 0) {
                 cell.textLabel.text = L(@"Clear image cache");
@@ -300,16 +287,6 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
                 [a show];
             }
             break;
-        case TNSetHelper: {
-            UIAlertView *a = [[UIAlertView alloc] initWithTitle:L(@"Audio helper") message:L(@"The address of the helper Muzika asks when YouTube refuses the sound (empty: none).")
-                                                       delegate:self cancelButtonTitle:L(@"Cancel") otherButtonTitles:L(@"Save"), L(@"Default"), nil];
-            a.alertViewStyle = UIAlertViewStylePlainTextInput;
-            a.tag = 1;
-            [a textFieldAtIndex:0].text = [TNSettings resolverBase];
-            [a textFieldAtIndex:0].keyboardType = UIKeyboardTypeURL;
-            [a show];
-            break;
-        }
         case TNSetStorage:
             if (row == 0) {
                 [[TNImageLoader shared] clearMemory];
@@ -337,11 +314,7 @@ enum { TNSetApple, TNSetPlayback, TNSetHelper, TNSetStorage, TNSetAbout, TNSetCo
 - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
 {
     if (buttonIndex == alertView.cancelButtonIndex) return;
-    if (alertView.tag == 1) {
-        if (buttonIndex == alertView.firstOtherButtonIndex) [TNSettings setResolverBase:[alertView textFieldAtIndex:0].text ?: @""];
-        else [TNSettings setResolverBase:nil];
-        [self.tableView reloadData];
-    } else if (alertView.tag == 2) {
+    if (alertView.tag == 2) {
         [[TNAppleMusic shared] disconnect];
         [self.tableView reloadData];
     }

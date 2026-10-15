@@ -27,26 +27,6 @@ static const NSUInteger TNMaxRecentSearches = 12;
     TNMain(^{ [[NSNotificationCenter defaultCenter] postNotificationName:TNSettingsDidChangeNotification object:nil]; });
 }
 
-#pragma mark - Resolver
-
-+ (NSString *)defaultResolverBase { return @"https://ytdlp.samcejko.eu/yt"; }
-
-+ (NSString *)resolverBase
-{
-    NSString *b = [DEF stringForKey:@"resolverBase"];
-    if (!b) return [self defaultResolverBase];
-    while ([b hasSuffix:@"/"]) b = [b substringToIndex:b.length - 1];
-    return b;
-}
-
-+ (void)setResolverBase:(NSString *)base
-{
-    NSString *s = [base stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (!s) [DEF removeObjectForKey:@"resolverBase"];
-    else [DEF setObject:s forKey:@"resolverBase"];
-    [self notify];
-}
-
 #pragma mark - Playback
 
 + (BOOL)autoplay { return [DEF boolForKey:@"autoplay"]; }

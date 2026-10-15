@@ -40,7 +40,7 @@ enum {
     TNErrorRestricted     = -13,   // not available in this country, removed...
     TNErrorPlayback       = -14,   // the audio could not be fetched or decoded
     TNErrorNoMatch        = -15,   // no YouTube version of an Apple Music song was found
-    TNErrorHelper         = -16,   // the audio helper is unreachable or broken (no song plays until it is back)
+    TNErrorRefused        = -16,   // YouTube turned the app itself away (no song plays until it gives in again)
 };
 
 NSError *TNMakeError(NSInteger code, NSString *message);

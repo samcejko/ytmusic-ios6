@@ -7,11 +7,6 @@
 + (void)registerDefaults;
 + (void)save;
 
-// The helper that hands out full-length audio addresses (yt-dlp on a Raspberry Pi, the one Tubie uses)
-+ (NSString *)resolverBase;                  // "https://ytdlp.samcejko.eu/yt"; "" = none
-+ (void)setResolverBase:(NSString *)base;
-+ (NSString *)defaultResolverBase;
-
 // Playback
 + (BOOL)autoplay;                            // when the music runs out, the radio of the last song follows
 + (void)setAutoplay:(BOOL)value;

@@ -254,14 +254,8 @@ static BOOL TNPressView(UIView *v, NSString *text)
         TNLog(@"Section %@: %@", params[@"name"], section ? @"shown" : @"unknown");
         return YES;
     }
-    // helper?url=<address> (empty: none, "default": the default): the audio helper, for testing without it
-    if ([target isEqualToString:@"helper"]) {
-        NSString *u = params[@"url"] ?: @"";
-        [TNSettings setResolverBase:[u isEqualToString:@"default"] ? nil : u];
-        TNLog(@"Helper: '%@'", [TNSettings resolverBase]);
-        return YES;
-    }
-    // audiotest?url=<percent-encoded audio address>&ms=<length>: the file straight to the engine (the decoder without the helper)
+
+    // audiotest?url=<percent-encoded audio address>&ms=<length>: the file straight to the engine (the decoder on its own)
     if ([target isEqualToString:@"audiotest"] && [params[@"url"] length]) {
         [[TNPlayer shared] debugPlayURL:params[@"url"] durationMs:[params[@"ms"] integerValue]];
         return YES;
