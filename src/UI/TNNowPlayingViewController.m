@@ -34,7 +34,8 @@
     self.tableView.backgroundColor = [UIColor clearColor];
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.showsVerticalScrollIndicator = NO;
-    self.tableView.contentInset = UIEdgeInsetsMake(30, 0, 80, 0);
+    // (exact row heights: iOS 11 and newer estimate them, and a line far down would land ~100 points off the middle)
+    if ([self.tableView respondsToSelector:@selector(setEstimatedRowHeight:)]) [self.tableView setValue:@0 forKey:@"estimatedRowHeight"];
     self.currentLine = -1;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refresh) name:TNPlayerDidChangeNotification object:nil];
 }
@@ -43,6 +44,30 @@
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_timer invalidate];
+}
+
+// Room above the first line and below the last one, so that the line being sung can always stand a little above the
+// middle (the panel is only ~180 points tall on a 3.5" iPhone)
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    CGFloat h = self.tableView.bounds.size.height;
+    UIEdgeInsets inset = UIEdgeInsetsMake(floorf(h * 0.4f), 0, ceilf(h * 0.6f), 0);
+    if (h > 0 && !UIEdgeInsetsEqualToEdgeInsets(inset, self.tableView.contentInset)) {
+        self.tableView.contentInset = inset;
+        [self scrollToCurrentAnimated:NO];
+    }
+}
+
+- (void)scrollToCurrentAnimated:(BOOL)animated
+{
+    UITableView *t = self.tableView;
+    if (self.message || self.currentLine < 0 || self.currentLine >= (NSInteger)self.lines.count) {
+        [t setContentOffset:CGPointMake(0, -t.contentInset.top) animated:animated];
+        return;
+    }
+    CGRect r = [t rectForRowAtIndexPath:[NSIndexPath indexPathForRow:self.currentLine inSection:0]];
+    [t setContentOffset:CGPointMake(0, floorf(CGRectGetMidY(r) - t.bounds.size.height * 0.4f)) animated:animated];
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -86,7 +111,7 @@
         me.source = result.source.length ? [NSString stringWithFormat:L(@"Lyrics: %@"), result.source] : nil;
         me.message = me.lines.count ? nil : L(@"No lyrics for this song.");
         [me.tableView reloadData];
-        if (me.lines.count) [me.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:NO];
+        [me scrollToCurrentAnimated:NO];
         [me tick];
     }];
 }
@@ -106,12 +131,15 @@
     if (old >= 0 && old < (NSInteger)self.lines.count) [rows addObject:[NSIndexPath indexPathForRow:old inSection:0]];
     if (line >= 0) [rows addObject:[NSIndexPath indexPathForRow:line inSection:0]];
     [self.tableView reloadRowsAtIndexPaths:rows withRowAnimation:UITableViewRowAnimationNone];
-    if (line >= 0 && !self.tableView.isDragging && !self.tableView.isDecelerating) {
-        [self.tableView scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:line inSection:0] atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
-    }
+    if (!self.tableView.isDragging && !self.tableView.isDecelerating) [self scrollToCurrentAnimated:YES];
 }
 
-- (UIFont *)lineFont { return [UIFont fontWithName:@"HelveticaNeue-Bold" size:TNIsPad() ? 22 : 18] ?: [UIFont boldSystemFontOfSize:19]; }
+// (smaller on a 3.5" screen: more of the song fits in the little panel)
+- (UIFont *)lineFont
+{
+    CGFloat size = TNIsPad() ? 22 : ([UIScreen mainScreen].bounds.size.height < 500 ? 16 : 18);
+    return [UIFont fontWithName:@"HelveticaNeue-Bold" size:size] ?: [UIFont boldSystemFontOfSize:size];
+}
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
