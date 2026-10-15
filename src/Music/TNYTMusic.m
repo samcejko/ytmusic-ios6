@@ -461,7 +461,14 @@ static TNShelf *TNShelfFrom(NSDictionary *section)
         NSMutableArray *items = [NSMutableArray array];
         id top = TNTopResultFromCard(r);
         if (top) [items addObject:top];
-        [items addObjectsFromArray:TNItemsFrom(TNArr(r[@"contents"]))];
+        for (id item in TNItemsFrom(TNArr(r[@"contents"]))) {
+            // (the songs under an artist's card come without the artist: it is the card's)
+            if ([top isKindOfClass:[TNArtist class]] && [item isKindOfClass:[TNTrack class]] && ![(TNTrack *)item artistNames].length) {
+                ((TNTrack *)item).artists = @[ top ];
+                ((TNTrack *)item).byline = ((TNArtist *)top).name;
+            }
+            [items addObject:item];
+        }
         shelf.items = items;
     } else if ((r = TNDict(section[@"gridRenderer"]))) {
         shelf.title = TNText(TNAt(r, @"header.gridHeaderRenderer.title"));

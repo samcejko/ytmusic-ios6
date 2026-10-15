@@ -73,6 +73,29 @@ static const NSUInteger TNChunkFrames = 4096;
     return item;
 }
 
++ (TNPlaybackItem *)itemForTrack:(TNTrack *)track url:(NSString *)url durationMs:(NSInteger)durationMs error:(NSError **)error
+{
+    TNPlaybackItem *item = [[TNPlaybackItem alloc] init];
+    item.track = track;
+    item.gain = 1;
+    TNAudioFile *file = [[TNAudioFile alloc] initWithURL:url];
+    [file start];
+    TNAACDecoder *decoder = [[TNAACDecoder alloc] initWithFile:file];
+    NSError *e = nil;
+    if (![decoder open:&e]) {
+        [file cancel];
+        if (error) *error = e;
+        return nil;
+    }
+    item.file = file;
+    item.decoder = decoder;
+    item.durationMs = durationMs ?: track.durationMs;
+    int rate = decoder.sampleRate ?: 44100;
+    decoder.totalFrames = (uint64_t)item.durationMs * (uint64_t)rate / 1000;
+    item.formatName = decoder.bitrate > 0 ? [NSString stringWithFormat:@"AAC %ld kbit/s", (long)((decoder.bitrate + 500) / 1000)] : @"AAC";
+    return item;
+}
+
 - (void)cancel { [self.file cancel]; }
 
 @end

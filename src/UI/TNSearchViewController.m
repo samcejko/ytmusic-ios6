@@ -49,7 +49,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
     TNTheme *theme = [TNTheme shared];
     [self.tableView registerClass:[TNTrackCell class] forCellReuseIdentifier:@"track"];
     [self.tableView registerClass:[TNMediaCell class] forCellReuseIdentifier:@"media"];
-    CGFloat w = self.view.bounds.size.width;
+    CGFloat w = MAX((CGFloat)320, self.view.bounds.size.width);   // (no width yet in viewDidLoad on newer iOS; the table widens it)
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 44 + 40)];
     header.backgroundColor = [UIColor clearColor];
     self.searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, w, 44)];

@@ -62,16 +62,23 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         __block NSError *requestError = nil;
         r.onComplete = ^(NSError *e) { requestError = e; };
         [r runSynchronously];
-        if (requestError) { failure = requestError; usleep(300000); continue; }
+        if (requestError) {
+            failure = TNMakeError(TNErrorHelper, [NSString stringWithFormat:@"%@ (%@)", L(@"The audio helper could not be reached."), requestError.localizedDescription]);
+            usleep(300000);
+            continue;
+        }
         NSDictionary *j = TNDict([TNUtils JSONObjectFromData:r.responseBody]);
         if (r.statusCode == 200 && j) { json = j; break; }
         NSString *message = TNStr(j[@"error"]) ?: TNStr(j[@"detail"]);
-        failure = TNMakeError(TNErrorPlayback, message.length ? [NSString stringWithFormat:L(@"The audio helper: %@"), message]
-                                                              : [NSString stringWithFormat:L(@"The audio helper answered with HTTP %ld."), (long)r.statusCode]);
-        if (r.statusCode < 500) break;
+        // (the helper or its tunnel down: no song will play; an answer about this one song: the next may)
+        BOOL helperDown = r.statusCode >= 500 || !j;
+        failure = TNMakeError(helperDown ? TNErrorHelper : TNErrorPlayback,
+                              message.length ? [NSString stringWithFormat:L(@"The audio helper: %@"), message]
+                                             : [NSString stringWithFormat:L(@"The audio helper answered with HTTP %ld."), (long)r.statusCode]);
+        if (!helperDown) break;
     }
     if (!json) {
-        if (error) *error = failure ?: TNMakeError(TNErrorPlayback, L(@"The audio helper could not be reached."));
+        if (error) *error = failure ?: TNMakeError(TNErrorHelper, L(@"The audio helper could not be reached."));
         return nil;
     }
     NSDictionary *formats = TNDict(json[@"formats"]);

@@ -14,6 +14,8 @@
 @property (nonatomic, copy) NSString *formatName;        // "AAC 128 kbit/s"
 // Loads a song (blocking, worker threads): the match, the audio address, the download, the header
 + (TNPlaybackItem *)loadTrack:(TNTrack *)track error:(NSError **)error;
+// The same from a known audio address (the debug command, tests)
++ (TNPlaybackItem *)itemForTrack:(TNTrack *)track url:(NSString *)url durationMs:(NSInteger)durationMs error:(NSError **)error;
 - (void)cancel;
 @end
 

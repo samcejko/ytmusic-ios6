@@ -254,6 +254,11 @@ static BOOL TNPressView(UIView *v, NSString *text)
         TNLog(@"Section %@: %@", params[@"name"], section ? @"shown" : @"unknown");
         return YES;
     }
+    // audiotest?url=<percent-encoded audio address>&ms=<length>: the file straight to the engine (the decoder without the helper)
+    if ([target isEqualToString:@"audiotest"] && [params[@"url"] length]) {
+        [[TNPlayer shared] debugPlayURL:params[@"url"] durationMs:[params[@"ms"] integerValue]];
+        return YES;
+    }
     if ([target isEqualToString:@"play"] && [params[@"v"] length]) {
         [TNRouter openURL:[@"https://music.youtube.com/watch?v=" stringByAppendingString:params[@"v"]]];
         return YES;

@@ -37,7 +37,7 @@
     self.tableView.rowHeight = 56;
     [self.tableView registerClass:[TNTrackCell class] forCellReuseIdentifier:@"track"];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(close)];
-    CGFloat w = self.view.bounds.size.width;
+    CGFloat w = MAX((CGFloat)320, self.view.bounds.size.width);   // (no width yet in viewDidLoad on newer iOS; the table widens it)
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 44 + 54)];
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(12, 8, w - 24, 40)];
     info.autoresizingMask = UIViewAutoresizingFlexibleWidth;

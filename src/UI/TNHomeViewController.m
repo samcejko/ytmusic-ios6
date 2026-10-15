@@ -21,8 +21,8 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 60)];
-    self.greeting = [[UILabel alloc] initWithFrame:CGRectMake(14, 14, self.view.bounds.size.width - 28, 36)];
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 60)];
+    self.greeting = [[UILabel alloc] initWithFrame:CGRectMake(14, 14, 292, 36)];
     self.greeting.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     self.greeting.font = [[TNTheme shared] headerFont];
     self.greeting.textColor = [[TNTheme shared] primaryTextColor];
@@ -38,6 +38,19 @@
 }
 
 - (void)dealloc { [[NSNotificationCenter defaultCenter] removeObserver:self]; }
+
+// (the view has no width yet in viewDidLoad on newer iOS: the greeting is placed once the table has one)
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    CGFloat w = self.tableView.bounds.size.width;
+    UIView *header = self.tableView.tableHeaderView;
+    if (w > 0 && fabs(header.bounds.size.width - w) > 1) {
+        header.frame = CGRectMake(0, 0, w, 60);
+        self.greeting.frame = CGRectMake(14, 14, w - 28, 36);
+        self.tableView.tableHeaderView = header;
+    }
+}
 
 - (NSString *)greetingText
 {

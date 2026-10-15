@@ -59,5 +59,6 @@ extern NSString * const TNPlayerDidFailNotification;        // userInfo[@"error"
 
 - (void)handleRemoteEvent:(UIEvent *)event;              // from the app delegate
 - (NSString *)debugState;
+- (void)debugPlayURL:(NSString *)url durationMs:(NSInteger)durationMs;   // an audio file's address straight to the engine
 
 @end

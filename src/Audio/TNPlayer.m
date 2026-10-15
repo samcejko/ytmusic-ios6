@@ -336,12 +336,41 @@ static void TNShuffleArray(NSMutableArray *a)
     TNLog(@"cannot play %@: %@", track.name, error.localizedDescription);
     [[NSNotificationCenter defaultCenter] postNotificationName:TNPlayerDidFailNotification object:self
                                                       userInfo:@{ @"error": error ?: TNMakeError(TNErrorPlayback, L(@"This song cannot be played.")) }];
-    if (++_failures >= TNMaxSkipsOnError) {
+    // (without the audio helper no song plays: skipping through the list would only fail on every one)
+    if (++_failures >= TNMaxSkipsOnError || error.code == TNErrorHelper) {
         self.playing = NO;
         [self changed];
         return;
     }
     [self advanceAutomatically:NO];
+}
+
+#pragma mark - Debug
+
+- (void)debugPlayURL:(NSString *)url durationMs:(NSInteger)durationMs
+{
+    TNTrack *t = [[TNTrack alloc] init];
+    t.name = @"Audio test";
+    t.byline = url;
+    t.durationMs = durationMs;
+    NSUInteger token = ++_loadToken;
+    [self dropPrepared];
+    self.currentTrack = t;
+    self.currentVideoId = nil;
+    self.loading = YES;
+    self.playing = YES;
+    [_engine stop];
+    [self changed];
+    dispatch_async(_loadQueue, ^{
+        NSError *error = nil;
+        TNPlaybackItem *item = [TNPlaybackItem itemForTrack:t url:url durationMs:durationMs error:&error];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != self->_loadToken) { [item cancel]; return; }
+            self.loading = NO;
+            if (!item) { TNLog(@"audio test failed: %@", error.localizedDescription); self.playing = NO; [self changed]; return; }
+            [self->_engine playItem:item fromMs:0 paused:NO];
+        });
+    });
 }
 
 - (void)dropPrepared
