@@ -75,6 +75,8 @@
             _heartButton = [self button:TNIconThumbUp size:20 action:@selector(toggleLike)];
             _queueButton = [self button:TNIconQueue size:20 action:@selector(openQueue)];
             _lyricsButton = [self button:TNIconLyrics size:20 action:@selector(openLyrics)];
+            _queueButton.accessibilityLabel = L(@"Queue");
+            _lyricsButton.accessibilityLabel = L(@"Song lyrics");   // (not just "Lyrics": the side panel's tab has that name)
             _progress = [[UISlider alloc] initWithFrame:CGRectZero];
             [_progress addTarget:self action:@selector(scrubStarted) forControlEvents:UIControlEventTouchDown];
             [_progress addTarget:self action:@selector(scrubEnded) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];

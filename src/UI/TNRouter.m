@@ -124,7 +124,7 @@ static __weak TNActionSheet *TNShownSheet;
 + (void)importLinkPrompt
 {
     NSString *clip = [UIPasteboard generalPasteboard].string ?: @"";
-    [self promptWithTitle:L(@"Import a link") message:L(@"Paste the link of a playlist or an album from Apple Music, Spotify or YouTube.")
+    [self promptWithTitle:L(@"Import a link") message:L(@"A playlist or an album from Apple Music, Spotify or YouTube")   // (short: on iOS 6 a longer message beside the field turns into a cut-off scroll box)
                      text:[TNImport canImport:clip] ? clip : @"" placeholder:@"https://..." button:L(@"Import") completion:^(NSString *link) {
         if (!link.length) return;
         if (![TNImport canImport:link]) { [self toast:L(@"Muzika can import links of Apple Music, Spotify and YouTube playlists.")]; return; }

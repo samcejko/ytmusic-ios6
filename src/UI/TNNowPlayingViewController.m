@@ -173,6 +173,9 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 @interface TNQueueViewController ()
 @property (nonatomic, strong) NSArray *upcoming;
 @property (nonatomic, strong) UIButton *editButton;
+@property (nonatomic, strong) TNTrack *shownTrack;        // what the rows show (see refresh)
+@property (nonatomic) NSUInteger shownQueueCount;
+@property (nonatomic) BOOL applyingEdit;                  // the table's own move/delete is going to the player
 - (void)refresh;
 @end
 
@@ -192,8 +195,12 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     self.tableView.rowHeight = 56;
     [self.tableView registerClass:[TNTrackCell class] forCellReuseIdentifier:@"track"];
     UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 40)];
-    self.editButton = [[TNTheme shared] outlineButtonWithTitle:L(@"Edit")];
-    self.editButton.frame = CGRectMake(320 - 96, 6, 86, 28);
+    TNTheme *theme = [TNTheme shared];
+    self.editButton = [theme outlineButtonWithTitle:L(@"Done")];
+    CGFloat w = [theme widthForButton:self.editButton minimum:86];   // (wide enough for both titles: Czech "HOTOVO"/"UPRAVIT")
+    [self.editButton setTitle:[L(@"Edit") uppercaseString] forState:UIControlStateNormal];
+    w = MAX(w, [theme widthForButton:self.editButton minimum:86]);
+    self.editButton.frame = CGRectMake(320 - 10 - w, 6, w, 28);
     self.editButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
     [self.editButton addTarget:self action:@selector(toggleEditing) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:self.editButton];
@@ -212,8 +219,16 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 
 - (void)refresh
 {
-    if (self.tableView.editing) return;   // (the rows stay while they are moved)
-    self.upcoming = [[TNPlayer shared] upcomingTracks:100];
+    if (self.applyingEdit) return;   // (the table changes its rows itself)
+    TNPlayer *p = [TNPlayer shared];
+    NSArray *upcoming = [p upcomingTracks:100];
+    // (while editing the rows stay as they are, unless the next song started: then the rows' indexes would no longer
+    // be the player's, and a delete would take out a different song)
+    if (self.tableView.editing && p.currentTrack == self.shownTrack && p.userQueue.count == self.shownQueueCount &&
+        [upcoming isEqualToArray:self.upcoming ?: @[]]) return;
+    self.shownTrack = p.currentTrack;
+    self.shownQueueCount = p.userQueue.count;
+    self.upcoming = upcoming;
     [self.tableView reloadData];
 }
 
@@ -272,6 +287,7 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 - (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)from toIndexPath:(NSIndexPath *)to
 {
     TNPlayer *p = [TNPlayer shared];
+    self.applyingEdit = YES;
     if (from.section == TNQueueUser) [p moveQueueItemFrom:(NSUInteger)from.row to:(NSUInteger)to.row];
     else if (from.section == TNQueueNext) {
         [p moveUpcomingFrom:(NSUInteger)from.row to:(NSUInteger)to.row];
@@ -281,12 +297,14 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
         [u insertObject:x atIndex:(NSUInteger)to.row];
         self.upcoming = u;
     }
+    self.applyingEdit = NO;
 }
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
 {
     if (editingStyle != UITableViewCellEditingStyleDelete) return;
     TNPlayer *p = [TNPlayer shared];
+    self.applyingEdit = YES;
     if (indexPath.section == TNQueueUser) [p removeFromQueueAtIndex:(NSUInteger)indexPath.row];
     else if (indexPath.section == TNQueueNext) {
         [p removeUpcomingAtIndex:(NSUInteger)indexPath.row];
@@ -294,7 +312,9 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
         [u removeObjectAtIndex:(NSUInteger)indexPath.row];
         self.upcoming = u;
     }
+    self.shownQueueCount = p.userQueue.count;
     [tableView deleteRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationFade];
+    self.applyingEdit = NO;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath { return L(@"Remove"); }

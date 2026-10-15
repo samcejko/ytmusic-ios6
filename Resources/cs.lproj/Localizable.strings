@@ -265,6 +265,7 @@
 "Loading your songs…" = "Načítám vaše skladby…";
 "Loved songs: %lu of %lu" = "Oblíbené skladby: %lu z %lu";
 "Lyrics" = "Text";
+"Song lyrics" = "Text skladby";
 "Lyrics: %@" = "Text: %@";
 "Made in Muzika" = "Vytvořeno v Muzice";
 "Making the playlist in Apple Music…" = "Vytvářím playlist v Apple Music…";
@@ -276,7 +277,7 @@
 "New playlist" = "Nový playlist";
 "New playlist…" = "Nový playlist…";
 "Off" = "Vypnuto";
-"Paste the link of a playlist or an album from Apple Music, Spotify or YouTube." = "Vložte odkaz na playlist nebo album z Apple Music, Spotify nebo YouTube.";
+"A playlist or an album from Apple Music, Spotify or YouTube" = "Playlist nebo album z Apple Music, Spotify či YouTube";
 "Playlist deleted" = "Playlist smazán";
 "Reading %lu songs…" = "Čtu skladby: %lu…";
 "Recently added" = "Nedávno přidané";
