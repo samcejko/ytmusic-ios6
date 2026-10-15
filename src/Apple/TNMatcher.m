@@ -209,7 +209,7 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 {
     NSUInteger n = 0;
     @synchronized (self) {
-        for (NSDictionary *e in [_matches allValues]) if (TNStr(TNDict(e)[@"v"]).length) n++;
+        for (NSString *key in _matches) if (![key hasPrefix:@"alt:"] && TNStr(TNDict(_matches[key])[@"v"]).length) n++;
     }
     return n;
 }
@@ -283,6 +283,54 @@ static double TNDurationScore(NSInteger a, NSInteger b)
     TNLog(@"match %@ (%@): nothing fitted", track.name, [track artistNames]);
     if (error) *error = last ?: TNMakeError(TNErrorNoMatch, [NSString stringWithFormat:L(@"\"%@\" was not found on YouTube."), track.name ?: @""]);
     return nil;
+}
+
+#pragma mark - Other versions
+
+- (NSString *)knownAlternativeFor:(NSString *)videoId
+{
+    if (!videoId.length) return nil;
+    @synchronized (self) {
+        NSString *v = TNStr(TNDict(_matches[[@"alt:" stringByAppendingString:videoId]])[@"v"]);
+        return v.length ? v : nil;
+    }
+}
+
+- (void)rememberAlternative:(NSString *)alternative for:(NSString *)videoId
+{
+    if (!videoId.length || !alternative.length) return;
+    @synchronized (self) { _matches[[@"alt:" stringByAppendingString:videoId]] = @{ @"v": alternative }; }
+    [self scheduleSave];
+}
+
+- (NSArray *)alternativesFor:(TNTrack *)track excluding:(NSString *)videoId durationMs:(NSInteger)durationMs
+{
+    TNTrack *wanted = track;
+    if (durationMs > 0 && !track.durationMs) {
+        wanted = [TNTrack fromJSON:[track toJSON]] ?: track;
+        wanted.durationMs = durationMs;
+    }
+    NSString *query = [NSString stringWithFormat:@"%@ %@", track.name ?: @"", TNPrimaryArtist([track artistNames])];
+    NSMutableArray *scored = [NSMutableArray array];
+    NSMutableSet *seen = [NSMutableSet setWithObject:videoId ?: @""];
+    for (NSNumber *f in @[ @(TNSearchSongs), @(TNSearchVideos) ]) {
+        NSArray *items = [TNYTMusic searchSync:query filter:(TNSearchFilter)[f integerValue] error:NULL];
+        for (id item in items) {
+            if (![item isKindOfClass:[TNTrack class]]) continue;
+            TNTrack *c = item;
+            if (!c.videoId.length || [seen containsObject:c.videoId]) continue;
+            [seen addObject:c.videoId];
+            double score = 0, title = 0, duration = 0;
+            [self bestOf:@[ c ] for:wanted score:&score titleScore:&title durationScore:&duration];
+            // (another version of the same recording: the title fits and so does the length, closely)
+            if (title >= 0.5 && duration >= 0.6 && score >= 0.55) [scored addObject:@[ @(score), c.videoId ]];
+        }
+    }
+    [scored sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) { return [b[0] compare:a[0]]; }];
+    NSMutableArray *ids = [NSMutableArray array];
+    for (NSArray *s in scored) if (ids.count < 4) [ids addObject:s[1]];
+    TNLog(@"alternatives for %@ (%@): %@", track.name, videoId, [ids componentsJoinedByString:@", "]);
+    return ids;
 }
 
 - (NSString *)videoIdForTrackSync:(TNTrack *)track error:(NSError **)error

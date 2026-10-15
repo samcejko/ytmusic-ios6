@@ -21,6 +21,12 @@
 - (void)matchTracks:(NSArray *)tracks;
 @property (nonatomic, readonly) NSUInteger pendingCount;
 
+// Other uploads of the same recording, best first (blocking): when one video's audio is not served in full
+// (YouTube wants a proof-of-origin token for some), another version plays; the one that worked is remembered
+- (NSArray *)alternativesFor:(TNTrack *)track excluding:(NSString *)videoId durationMs:(NSInteger)durationMs;
+- (NSString *)knownAlternativeFor:(NSString *)videoId;
+- (void)rememberAlternative:(NSString *)alternative for:(NSString *)videoId;
+
 - (void)setVideoId:(NSString *)videoId forTrack:(TNTrack *)track;   // the user's choice
 - (void)forget:(TNTrack *)track;                                    // look it up again next time
 - (NSUInteger)matchCount;

@@ -33,46 +33,59 @@ static const NSUInteger TNChunkFrames = 4096;
         if (error) *error = TNMakeError(TNErrorPlayback, L(@"This song cannot be played."));
         return nil;
     }
-    TNPlaybackItem *item = [[TNPlaybackItem alloc] init];
-    item.track = track;
-    item.videoId = videoId;
-    item.gain = 1;
+    TNMatcher *matcher = [TNMatcher shared];
+    NSString *known = [matcher knownAlternativeFor:videoId];
+    NSString *original = videoId;
+    if (known) videoId = known;
     NSError *last = nil;
-    for (int attempt = 0; attempt < 2; attempt++) {
-        NSInteger ms = 0;
-        NSError *e = nil;
-        NSString *url = [TNStreams audioURLForVideo:videoId durationMs:&ms error:&e];
-        if (!url) {
-            if (error) *error = e;
-            return nil;
+    NSInteger status = 0, ms = 0;
+    TNPlaybackItem *item = [self openVideo:videoId track:track status:&status durationMs:&ms error:&last];
+    // YouTube serves some songs' audio in full only with a proof-of-origin token the helper lacks (403 on the whole
+    // file): another upload of the same recording plays instead, and is remembered for the next time
+    if (!item && (status == 403 || status == 404 || status == 410) && last.code != TNErrorHelper) {
+        for (NSString *alternative in [matcher alternativesFor:track excluding:videoId durationMs:ms]) {
+            NSError *e = nil;
+            item = [self openVideo:alternative track:track status:&status durationMs:NULL error:&e];
+            if (item) {
+                [matcher rememberAlternative:alternative for:original];
+                TNLog(@"%@: %@ is not served in full, %@ plays instead", track.name, videoId, alternative);
+                break;
+            }
+            if (e.code == TNErrorHelper) { last = e; break; }
         }
-        TNAudioFile *file = [[TNAudioFile alloc] initWithURL:url];
-        [file start];
-        TNAACDecoder *decoder = [[TNAACDecoder alloc] initWithFile:file];
-        if ([decoder open:&e]) {
-            item.file = file;
-            item.decoder = decoder;
-            item.durationMs = ms ?: track.durationMs;
-            break;
-        }
-        [file cancel];
-        last = e;
-        // an address that expired or was refused: a fresh one from the helper, once
-        [TNStreams forget:videoId];
-        NSInteger status = file.lastStatus;
-        if (status != 403 && status != 404 && status != 410) break;
     }
-    if (!item.decoder) {
+    if (!item) {
         if (error) *error = last ?: TNMakeError(TNErrorPlayback, L(@"The song could not be downloaded."));
         return nil;
     }
-    int rate = item.decoder.sampleRate ?: 44100;
-    item.decoder.totalFrames = (uint64_t)item.durationMs * (uint64_t)rate / 1000;
-    item.formatName = item.decoder.bitrate > 0 ? [NSString stringWithFormat:@"AAC %ld kbit/s", (long)((item.decoder.bitrate + 500) / 1000)] : @"AAC";
-    TNLog(@"loaded %@ (%@): %@, %d Hz", track.name, videoId, item.formatName, rate);
+    TNLog(@"loaded %@ (%@): %@, %d Hz", track.name, item.videoId, item.formatName, item.decoder.sampleRate);
     return item;
 }
 
+// One video's audio: its address from the helper, the download started, the header read
++ (TNPlaybackItem *)openVideo:(NSString *)videoId track:(TNTrack *)track status:(NSInteger *)status durationMs:(NSInteger *)durationOut error:(NSError **)error
+{
+    NSInteger ms = 0;
+    NSError *e = nil;
+    if (status) *status = 0;
+    NSString *url = [TNStreams audioURLForVideo:videoId durationMs:&ms error:&e];
+    if (durationOut) *durationOut = ms;
+    if (!url) {
+        if (error) *error = e;
+        return nil;
+    }
+    NSInteger durationMs = ms ?: track.durationMs;
+    TNPlaybackItem *item = [self itemForTrack:track url:url durationMs:durationMs error:&e];
+    if (!item) {
+        NSInteger s = e.code >= 400 ? e.code : 0;
+        if (status) *status = s;
+        if (s) [TNStreams forget:videoId];
+        if (error) *error = e;
+        return nil;
+    }
+    item.videoId = videoId;
+    return item;
+}
 + (TNPlaybackItem *)itemForTrack:(TNTrack *)track url:(NSString *)url durationMs:(NSInteger)durationMs error:(NSError **)error
 {
     TNPlaybackItem *item = [[TNPlaybackItem alloc] init];
@@ -92,7 +105,9 @@ static const NSUInteger TNChunkFrames = 4096;
     item.durationMs = durationMs ?: track.durationMs;
     int rate = decoder.sampleRate ?: 44100;
     decoder.totalFrames = (uint64_t)item.durationMs * (uint64_t)rate / 1000;
-    item.formatName = decoder.bitrate > 0 ? [NSString stringWithFormat:@"AAC %ld kbit/s", (long)((decoder.bitrate + 500) / 1000)] : @"AAC";
+    NSInteger bitrate = decoder.bitrate;
+    if (bitrate <= 0 && file.length && item.durationMs > 0) bitrate = (NSInteger)((double)file.length * 8000.0 / (double)item.durationMs);
+    item.formatName = bitrate > 0 ? [NSString stringWithFormat:@"AAC %ld kbit/s", (long)((bitrate + 500) / 1000)] : @"AAC";
     return item;
 }
 
