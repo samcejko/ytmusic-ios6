@@ -151,7 +151,7 @@ LAUNCH = {
 }
 
 for name, size in ICONS.items():
-    make_home_icon(size).save(os.path.join(OUT, name), "PNG")
+    make_icon(size).save(os.path.join(OUT, name), "PNG")
     print("icon", name)
 
 for name, (w, h) in LAUNCH.items():

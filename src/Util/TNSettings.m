@@ -21,6 +21,7 @@ static const NSUInteger TNMaxRecentSearches = 12;
         @"downloadWiFiOnly": @YES,
         @"syncAppleLikes": @YES,
         @"sidePanel": @YES,
+        @"classicPlayer": @NO,
         @"verifyTLS": @YES,
         @"recentSearches": @[],
     }];
@@ -61,6 +62,9 @@ static const NSUInteger TNMaxRecentSearches = 12;
 
 + (BOOL)sidePanel { return [DEF boolForKey:@"sidePanel"]; }
 + (void)setSidePanel:(BOOL)value { [DEF setBool:value forKey:@"sidePanel"]; [self notify]; }
+
++ (BOOL)classicPlayer { return [DEF boolForKey:@"classicPlayer"]; }
++ (void)setClassicPlayer:(BOOL)value { [DEF setBool:value forKey:@"classicPlayer"]; [self notify]; }
 
 #pragma mark - Apple Music
 

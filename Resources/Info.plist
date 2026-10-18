@@ -24,9 +24,9 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.1.1</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>iPhoneOS</string>
@@ -64,7 +64,7 @@
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleBlackOpaque</string>
 	<key>UIPrerenderedIcon</key>
-	<true/>
+	<false/>
 	<key>CFBundleIconFiles</key>
 	<array>
 		<string>Icon.png</string>
@@ -102,7 +102,7 @@
 				<string>Icon-83.5@2x.png</string>
 			</array>
 			<key>UIPrerenderedIcon</key>
-			<true/>
+			<false/>
 		</dict>
 	</dict>
 	<key>CFBundleURLTypes</key>

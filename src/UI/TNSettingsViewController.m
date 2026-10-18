@@ -87,7 +87,7 @@ static UIView *TNGroupedLabel(NSString *text, CGFloat width, BOOL header, CGFloa
 #pragma mark - Settings
 
 enum { TNSetApple, TNSetPlayback, TNSetDownloads, TNSetStorage, TNSetAbout, TNSetCount };
-enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMatchAll, TNPlaySidePanel };
+enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMatchAll, TNPlayClassicPlayer, TNPlaySidePanel };
 
 @interface TNSettingsViewController () <UIAlertViewDelegate>
 @property (nonatomic, copy) NSString *cacheSize;
@@ -134,7 +134,7 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
 {
     switch (section) {
         case TNSetApple: return [[TNAppleMusic shared] connected] ? 5 : 2;
-        case TNSetPlayback: return TNIsPad() ? 6 : 5;
+        case TNSetPlayback: return TNIsPad() ? 7 : 6;
         case TNSetDownloads: return 4;
         case TNSetStorage: return 3;
         case TNSetAbout: return 3;
@@ -158,7 +158,7 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
 {
     switch (section) {
         case TNSetApple: return L(@"Your Apple Music playlists play from YouTube Music: every song is looked up by its ISRC code, else by its title, artist and length. A wrong match can be fixed in the song's menu.");
-        case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing. Same loudness: every song plays as loud as the next (by YouTube's measure of each song). Crossfade blends the end of a song into the next one.");
+        case TNSetPlayback: return L(@"Autoplay: when your music runs out, the radio of the last song keeps playing. Same loudness: every song plays as loud as the next (by YouTube's measure of each song). Crossfade blends the end of a song into the next one. Classic player: iOS 6 graphite design for Now Playing.");
         case TNSetDownloads: return L(@"Data saver: on mobile data songs play at 48 kbit/s (HE-AAC, about a third of the data). Downloaded songs play without the internet, in full quality.");
         case TNSetAbout: return L(@"Muzika is an unofficial app. It is not made, endorsed or supported by Google, YouTube or Apple.");
     }
@@ -258,6 +258,7 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
             }
             if (row == TNPlayVideos) { cell.textLabel.text = L(@"Music videos for Apple songs"); cell.accessoryView = [self switchOn:[TNSettings allowVideosForApple] action:@selector(videosChanged:)]; }
             if (row == TNPlayMatchAll) { cell.textLabel.text = L(@"Find whole playlists at once"); cell.accessoryView = [self switchOn:[TNSettings matchWholePlaylists] action:@selector(matchAllChanged:)]; }
+            if (row == TNPlayClassicPlayer) { cell.textLabel.text = L(@"Classic player"); cell.accessoryView = [self switchOn:[TNSettings classicPlayer] action:@selector(classicPlayerChanged:)]; }
             if (row == TNPlaySidePanel) { cell.textLabel.text = L(@"Side panel in landscape"); cell.accessoryView = [self switchOn:[TNSettings sidePanel] action:@selector(sidePanelChanged:)]; }
             break;
         case TNSetDownloads:
@@ -388,5 +389,6 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
 - (void)autoplayChanged:(UISwitch *)s { [TNSettings setAutoplay:s.on]; }
 - (void)videosChanged:(UISwitch *)s { [TNSettings setAllowVideosForApple:s.on]; }
 - (void)matchAllChanged:(UISwitch *)s { [TNSettings setMatchWholePlaylists:s.on]; }
+- (void)classicPlayerChanged:(UISwitch *)s { [TNSettings setClassicPlayer:s.on]; }
 
 @end

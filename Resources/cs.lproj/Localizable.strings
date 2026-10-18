@@ -236,8 +236,9 @@
 "Apple Music charts" = "Žebříčky Apple Music";
 "Apple Music did not make the playlist." = "Apple Music playlist nevytvořila.";
 "Apple Music does not have this song." = "Apple Music tuto skladbu nemá.";
-"Autoplay: when your music runs out, the radio of the last song keeps playing. Same loudness: every song plays as loud as the next (by YouTube's measure of each song). Crossfade blends the end of a song into the next one." = "Automatické přehrávání: když hudba dojde, hraje dál rádio poslední skladby. Stejná hlasitost: každá skladba hraje stejně nahlas jako další (podle měření YouTube). Prolínání plynule převede konec skladby do další.";
+"Autoplay: when your music runs out, the radio of the last song keeps playing. Same loudness: every song plays as loud as the next (by YouTube's measure of each song). Crossfade blends the end of a song into the next one. Classic player: iOS 6 graphite design for Now Playing." = "Automatické přehrávání: když hudba dojde, hraje dál rádio poslední skladby. Stejná hlasitost: každá skladba hraje stejně nahlas jako další (podle měření YouTube). Prolínání plynule převede konec skladby do další. Klasický přehrávač: grafitový design iOS 6 pro obrazovku Přehrává se.";
 "Charts" = "Žebříčky";
+"Classic player" = "Klasický přehrávač";
 "Create" = "Vytvořit";
 "Crossfade" = "Prolínání";
 "Data and downloads" = "Data a stahování";

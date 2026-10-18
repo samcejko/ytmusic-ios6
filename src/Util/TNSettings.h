@@ -26,6 +26,8 @@
 + (void)setSyncAppleLikes:(BOOL)value;
 + (BOOL)sidePanel;                           // iPad landscape: "Up next" / lyrics beside the content
 + (void)setSidePanel:(BOOL)value;
++ (BOOL)classicPlayer;
++ (void)setClassicPlayer:(BOOL)value;
 
 // Apple Music
 + (NSString *)appleUserToken;                // the "media-user-token" of music.apple.com (keychain)

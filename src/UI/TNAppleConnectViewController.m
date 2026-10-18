@@ -75,6 +75,19 @@
     self.connectButton = [theme accentButtonWithTitle:L(@"Connect")];
     [self.connectButton addTarget:self action:@selector(connectPasted) forControlEvents:UIControlEventTouchUpInside];
     [self.scroll addSubview:self.connectButton];
+
+    UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, 44)];
+    toolbar.barStyle = UIBarStyleBlackTranslucent;
+    UIBarButtonItem *connectBarBtn = [[UIBarButtonItem alloc] initWithTitle:L(@"Connect") style:UIBarButtonItemStyleDone target:self action:@selector(connectPasted)];
+    UIBarButtonItem *flex = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    UIBarButtonItem *doneBtn = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self.tokenView action:@selector(resignFirstResponder)];
+    toolbar.items = @[connectBarBtn, flex, doneBtn];
+    self.tokenView.inputAccessoryView = toolbar;
+
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self.tokenView action:@selector(resignFirstResponder)];
+    tap.cancelsTouchesInView = NO;
+    [self.scroll addGestureRecognizer:tap];
+
     self.stepsLabel = [self label:[theme smallFont] color:[theme tertiaryTextColor]];
     self.stepsLabel.text = [NSString stringWithFormat:@"%@\n1. %@\n2. %@\n3. %@",
                             L(@"Where the token is:"),
@@ -83,9 +96,17 @@
                             L(@"Copy the value of the cookie media-user-token.")];
 }
 
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+
     __weak TNAppleConnectViewController *weakSelf = self;
     BOOL running = [[TNPairServer shared] startWithHandler:^(NSString *token) { [weakSelf connectWithToken:token]; }];
     if (running) {
@@ -101,7 +122,41 @@
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillHideNotification object:nil];
     [[TNPairServer shared] stop];
+}
+
+- (void)keyboardWillShow:(NSNotification *)note
+{
+    NSDictionary *info = [note userInfo];
+    CGRect kbFrame = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    CGRect kbFrameConverted = [self.view convertRect:kbFrame fromView:nil];
+    CGFloat kbHeight = kbFrameConverted.size.height;
+
+    NSTimeInterval duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    UIViewAnimationCurve curve = (UIViewAnimationCurve)[[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
+
+    UIEdgeInsets insets = UIEdgeInsetsMake(0, 0, kbHeight, 0);
+    [UIView animateWithDuration:duration delay:0 options:(curve << 16) animations:^{
+        self.scroll.contentInset = insets;
+        self.scroll.scrollIndicatorInsets = insets;
+    } completion:nil];
+
+    CGRect btnFrame = self.connectButton.frame;
+    [self.scroll scrollRectToVisible:CGRectInset(btnFrame, 0, -30) animated:YES];
+}
+
+- (void)keyboardWillHide:(NSNotification *)note
+{
+    NSDictionary *info = [note userInfo];
+    NSTimeInterval duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    UIViewAnimationCurve curve = (UIViewAnimationCurve)[[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
+
+    [UIView animateWithDuration:duration delay:0 options:(curve << 16) animations:^{
+        self.scroll.contentInset = UIEdgeInsetsZero;
+        self.scroll.scrollIndicatorInsets = UIEdgeInsetsZero;
+    } completion:nil];
 }
 
 - (void)viewWillLayoutSubviews
