@@ -41,6 +41,7 @@
     self.title = L(@"Apple Music");
     self.view.backgroundColor = [theme backgroundColor];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(close)];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:L(@"Connect") style:UIBarButtonItemStyleDone target:self action:@selector(connectPasted)];
     self.scroll = [[UIScrollView alloc] initWithFrame:self.view.bounds];
     self.scroll.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.scroll.alwaysBounceVertical = YES;
@@ -138,13 +139,19 @@
     UIViewAnimationCurve curve = (UIViewAnimationCurve)[[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
 
     UIEdgeInsets insets = UIEdgeInsetsMake(0, 0, kbHeight, 0);
-    [UIView animateWithDuration:duration delay:0 options:(curve << 16) animations:^{
-        self.scroll.contentInset = insets;
-        self.scroll.scrollIndicatorInsets = insets;
-    } completion:nil];
-
-    CGRect btnFrame = self.connectButton.frame;
-    [self.scroll scrollRectToVisible:CGRectInset(btnFrame, 0, -30) animated:YES];
+    CGFloat targetOffsetY = CGRectGetMaxY(self.connectButton.frame) + 16 - (self.scroll.bounds.size.height - kbHeight);
+    if (targetOffsetY > 0) {
+        [UIView animateWithDuration:duration delay:0 options:(curve << 16) animations:^{
+            self.scroll.contentInset = insets;
+            self.scroll.scrollIndicatorInsets = insets;
+            self.scroll.contentOffset = CGPointMake(0, targetOffsetY);
+        } completion:nil];
+    } else {
+        [UIView animateWithDuration:duration delay:0 options:(curve << 16) animations:^{
+            self.scroll.contentInset = insets;
+            self.scroll.scrollIndicatorInsets = insets;
+        } completion:nil];
+    }
 }
 
 - (void)keyboardWillHide:(NSNotification *)note
@@ -206,6 +213,7 @@
     if (self.busy) return;
     self.busy = YES;
     self.connectButton.enabled = NO;
+    self.navigationItem.rightBarButtonItem.enabled = NO;
     [self.spinner startAnimating];
     self.statusLabel.text = L(@"Checking the token with Apple…");
     [self.view setNeedsLayout];
@@ -214,6 +222,7 @@
         TNAppleConnectViewController *me = weakSelf;
         me.busy = NO;
         me.connectButton.enabled = YES;
+        me.navigationItem.rightBarButtonItem.enabled = YES;
         [me.spinner stopAnimating];
         if (error) {
             me.statusLabel.text = error.localizedDescription;
