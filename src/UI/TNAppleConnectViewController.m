@@ -5,7 +5,7 @@
 #import "TNTheme.h"
 #import "TNCommon.h"
 
-@interface TNAppleConnectViewController () <UITextViewDelegate>
+@interface TNAppleConnectViewController () <UITextViewDelegate, UIGestureRecognizerDelegate>
 @property (nonatomic, strong) UIScrollView *scroll;
 @property (nonatomic, strong) UIImageView *mark;
 @property (nonatomic, strong) UILabel *titleLabel;
@@ -87,6 +87,7 @@
 
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self.tokenView action:@selector(resignFirstResponder)];
     tap.cancelsTouchesInView = NO;
+    tap.delegate = self;
     [self.scroll addGestureRecognizer:tap];
 
     self.stepsLabel = [self label:[theme smallFont] color:[theme tertiaryTextColor]];
@@ -123,17 +124,28 @@
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
+    [self.view endEditing:YES];
+    self.scroll.contentInset = UIEdgeInsetsZero;
+    self.scroll.scrollIndicatorInsets = UIEdgeInsetsZero;
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillHideNotification object:nil];
     [[TNPairServer shared] stop];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
+{
+    // Editing and selecting the token must not immediately dismiss its keyboard.
+    return ![touch.view isDescendantOfView:self.tokenView] &&
+           ![touch.view isDescendantOfView:self.connectButton];
 }
 
 - (void)keyboardWillShow:(NSNotification *)note
 {
     NSDictionary *info = [note userInfo];
     CGRect kbFrame = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    CGRect kbFrameConverted = [self.view convertRect:kbFrame fromView:nil];
-    CGFloat kbHeight = kbFrameConverted.size.height;
+    CGRect kbFrameConverted = [self.scroll convertRect:kbFrame fromView:nil];
+    CGRect overlap = CGRectIntersection(self.scroll.bounds, kbFrameConverted);
+    CGFloat kbHeight = CGRectIsNull(overlap) ? 0 : overlap.size.height;
 
     NSTimeInterval duration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve curve = (UIViewAnimationCurve)[[info objectForKey:UIKeyboardAnimationCurveUserInfoKey] integerValue];
