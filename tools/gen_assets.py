@@ -95,7 +95,7 @@ def rounded_mask(size, radius_ratio=0.1757):
 
 
 def make_home_icon(size):
-    # UIPrerenderedIcon is on, so bake the iOS rounded corners in ourselves
+    # Legacy Cydia installs use system-app icons: include the iOS 6 mask.
     icon = make_icon(size).convert("RGBA")
     icon.putalpha(rounded_mask(size))
     return icon
@@ -151,7 +151,7 @@ LAUNCH = {
 }
 
 for name, size in ICONS.items():
-    make_icon(size).save(os.path.join(OUT, name), "PNG")
+    make_home_icon(size).save(os.path.join(OUT, name), "PNG")
     print("icon", name)
 
 for name, (w, h) in LAUNCH.items():
