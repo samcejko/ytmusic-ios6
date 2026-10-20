@@ -3,6 +3,17 @@
 #import "TNModern.h"
 #import "TNCommon.h"
 
+static UIImage *TNStretchImage(UIImage *image, UIEdgeInsets caps)
+{
+    if ([image respondsToSelector:@selector(resizableImageWithCapInsets:resizingMode:)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability"
+        return [image resizableImageWithCapInsets:caps resizingMode:UIImageResizingModeStretch];
+#pragma clang diagnostic pop
+    }
+    return [image stretchableImageWithLeftCapWidth:(NSInteger)caps.left topCapHeight:(NSInteger)caps.top];
+}
+
 static UIColor *RGB(NSInteger r, NSInteger g, NSInteger b)
 {
     return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:1.0];
@@ -49,7 +60,7 @@ static UIImage *TNButtonImage(UIColor *top, UIColor *bottom, UIColor *stroke, CG
             [path stroke];
         }
     });
-    return [image resizableImageWithCapInsets:UIEdgeInsetsMake(radius + 1, radius + 1, radius + 1, radius + 1) resizingMode:UIImageResizingModeStretch];
+    return TNStretchImage(image, UIEdgeInsetsMake(radius + 1, radius + 1, radius + 1, radius + 1));
 }
 
 static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UIColor *line, CGFloat height)
@@ -61,7 +72,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
         [line setFill];
         UIRectFill(CGRectMake(0, height - 1, 4, 1));
     });
-    return [image resizableImageWithCapInsets:UIEdgeInsetsMake(2, 1, 2, 1) resizingMode:UIImageResizingModeStretch];
+    return TNStretchImage(image, UIEdgeInsetsMake(2, 1, 2, 1));
 }
 
 @interface TNTheme ()
@@ -176,7 +187,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
             path.lineWidth = 1.5;
             [path stroke];
         });
-        return [image resizableImageWithCapInsets:UIEdgeInsetsMake(16, 16, 16, 16) resizingMode:UIImageResizingModeStretch];
+        return TNStretchImage(image, UIEdgeInsetsMake(16, 16, 16, 16));
     }];
 }
 
@@ -190,7 +201,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
             [[UIColor colorWithWhite:1 alpha:0.12] setStroke];
             [path stroke];
         });
-        return [image resizableImageWithCapInsets:UIEdgeInsetsMake(14, 15, 14, 15) resizingMode:UIImageResizingModeStretch];
+        return TNStretchImage(image, UIEdgeInsetsMake(14, 15, 14, 15));
     }];
 }
 
@@ -202,7 +213,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
             [self.accentColor setFill];
             UIRectFill(CGRectMake(0, 0, 3, 40));
         });
-        return [image resizableImageWithCapInsets:UIEdgeInsetsMake(1, 4, 1, 1) resizingMode:UIImageResizingModeStretch];
+        return TNStretchImage(image, UIEdgeInsetsMake(1, 4, 1, 1));
     }];
 }
 
@@ -244,7 +255,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
             UIColor *dark = [UIColor colorWithWhite:0 alpha:0.75], *clear = [UIColor colorWithWhite:0 alpha:0];
             TNDrawVerticalGradient(ctx, CGRectMake(0, 0, 4, 64), top ? dark : clear, top ? clear : dark);
         });
-        return [image resizableImageWithCapInsets:UIEdgeInsetsMake(0, 1, 0, 1) resizingMode:UIImageResizingModeStretch];
+        return TNStretchImage(image, UIEdgeInsetsMake(0, 1, 0, 1));
     }];
 }
 
@@ -256,7 +267,7 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
             [(filled ? self.accentColor : RGB(70, 72, 76)) setFill];
             [path fill];
         });
-        return [image resizableImageWithCapInsets:UIEdgeInsetsMake(0, 5, 0, 5) resizingMode:UIImageResizingModeStretch];
+        return TNStretchImage(image, UIEdgeInsetsMake(0, 5, 0, 5));
     }];
 }
 
