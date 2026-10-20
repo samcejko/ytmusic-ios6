@@ -95,7 +95,7 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    TNShelf *shelf = self.shelves[(NSUInteger)section];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)section];
     if ([self isTiles:shelf]) {
         NSInteger columns = [self columns];
         return ((NSInteger)shelf.items.count + columns - 1) / columns;
@@ -105,7 +105,7 @@
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    TNShelf *shelf = self.shelves[(NSUInteger)indexPath.section];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)indexPath.section];
     if ([self isTiles:shelf]) return [TNTileRowCell heightForWidth:tableView.bounds.size.width columns:[self columns]];
     if (shelf.songs) return [TNSongGridCell heightForRows:[self songRows:shelf]];
     return [TNShelfCell heightForCardWidth:[self cardWidth]];
@@ -113,7 +113,7 @@
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
-    TNShelf *shelf = self.shelves[(NSUInteger)section];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)section];
     if (!shelf.title.length) return nil;
     if (shelf.moreBrowseId.length) return TNSectionHeaderWithMore(shelf.title, tableView.bounds.size.width, self, @selector(moreTapped:), section);
     return TNSectionHeader(shelf.title, tableView.bounds.size.width);
@@ -121,12 +121,12 @@
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
 {
-    return [[self.shelves[(NSUInteger)section] title] length] ? 26 : 0;
+    return [[[self.shelves objectAtIndex:(NSUInteger)section] title] length] ? 26 : 0;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    TNShelf *shelf = self.shelves[(NSUInteger)indexPath.section];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)indexPath.section];
     if ([self isTiles:shelf]) {
         TNTileRowCell *cell = [tableView dequeueReusableCellWithIdentifier:@"tiles" forIndexPath:indexPath];
         NSInteger columns = [self columns], start = indexPath.row * columns;
@@ -158,7 +158,7 @@
 - (void)moreTapped:(UIButton *)sender
 {
     if (sender.tag < 0 || sender.tag >= (NSInteger)self.shelves.count) return;
-    TNShelf *shelf = self.shelves[(NSUInteger)sender.tag];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)sender.tag];
     [TNRouter openBrowseId:shelf.moreBrowseId params:shelf.moreParams title:shelf.title];
 }
 

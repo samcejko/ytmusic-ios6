@@ -75,11 +75,11 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
         _art.clipsToBounds = YES;
         [self.contentView addSubview:_art];
         _numberLabel = [self label:[theme smallFont] color:[theme secondaryTextColor]];
-        _numberLabel.textAlignment = NSTextAlignmentCenter;
+        _numberLabel.textAlignment = UITextAlignmentCenter;
         _titleLabel = [self label:[theme bodyFont] color:[theme primaryTextColor]];
         _subtitleLabel = [self label:[theme smallFont] color:[theme secondaryTextColor]];
         _durationLabel = [self label:[theme smallFont] color:[theme tertiaryTextColor]];
-        _durationLabel.textAlignment = NSTextAlignmentRight;
+        _durationLabel.textAlignment = UITextAlignmentRight;
         _explicitView = [[UIImageView alloc] initWithImage:[theme explicitBadge]];
         [self.contentView addSubview:_explicitView];
         _warningView = [[UIImageView alloc] initWithImage:[theme icon:TNIconWarning size:14 color:[theme accentTextColor]]];
@@ -276,7 +276,7 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     self.art.layer.cornerRadius = self.round ? w / 2 : 0;
     self.titleLabel.frame = CGRectMake(0, w + 6, w, 17);
     self.subtitleLabel.frame = CGRectMake(0, w + 23, w, 16);
-    self.titleLabel.textAlignment = self.round ? NSTextAlignmentCenter : NSTextAlignmentLeft;
+    self.titleLabel.textAlignment = self.round ? UITextAlignmentCenter : UITextAlignmentLeft;
     self.subtitleLabel.textAlignment = self.titleLabel.textAlignment;
 }
 
@@ -318,10 +318,10 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     }
     CGFloat x = 12, gap = 14;
     for (NSUInteger i = 0; i < self.cards.count; i++) {
-        TNCardView *card = self.cards[i];
+        TNCardView *card = [self.cards objectAtIndex:i];
         card.hidden = i >= items.count;
         if (card.hidden) continue;
-        id item = items[i];
+        id item = [items objectAtIndex:i];
         card.round = [item isKindOfClass:[TNArtist class]];
         card.wide = [item isKindOfClass:[TNTrack class]] && ((TNTrack *)item).isVideo;
         card.item = item;
@@ -454,10 +454,10 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     }
     CGFloat x = 6;
     for (NSUInteger i = 0; i < self.songViews.count; i++) {
-        TNGridSongView *v = self.songViews[i];
+        TNGridSongView *v = [self.songViews objectAtIndex:i];
         v.hidden = i >= tracks.count;
         if (v.hidden) continue;
-        TNTrack *t = tracks[i];
+        TNTrack *t = [tracks objectAtIndex:i];
         v.track = t;
         v.index = i;
         v.moreButton.tag = (NSInteger)i;
@@ -485,7 +485,7 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
 - (void)moreTapped:(UIButton *)sender
 {
     if (sender.tag < 0 || (NSUInteger)sender.tag >= self.songViews.count) return;
-    TNGridSongView *v = self.songViews[(NSUInteger)sender.tag];
+    TNGridSongView *v = [self.songViews objectAtIndex:(NSUInteger)sender.tag];
     if (self.onMore && v.track) self.onMore(v.track, sender);
 }
 
@@ -568,10 +568,10 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
         [self.tiles addObject:t];
     }
     for (NSUInteger i = 0; i < self.tiles.count; i++) {
-        TNTileView *t = self.tiles[i];
+        TNTileView *t = [self.tiles objectAtIndex:i];
         t.hidden = i >= tiles.count || i >= (NSUInteger)columns;
         if (t.hidden) continue;
-        id item = tiles[i];
+        id item = [tiles objectAtIndex:i];
         t.item = item;
         t.titleLabel.text = TNTitleOf(item);
         NSString *hex = [item isKindOfClass:[TNCategory class]] ? ((TNCategory *)item).colorHex : nil;
@@ -588,7 +588,7 @@ UIView *TNSectionHeaderWithMore(NSString *title, CGFloat width, id target, SEL a
     CGSize s = self.contentView.bounds.size;
     CGFloat gap = 10, w = (s.width - gap - gap * (CGFloat)columns) / (CGFloat)columns, h = s.height - gap;
     for (NSUInteger i = 0; i < self.tiles.count; i++) {
-        UIView *t = self.tiles[i];
+        UIView *t = [self.tiles objectAtIndex:i];
         t.frame = CGRectMake(floorf(gap + (CGFloat)i * (w + gap)), 5, floorf(w), floorf(h));
     }
 }

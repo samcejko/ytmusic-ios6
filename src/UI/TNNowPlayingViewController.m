@@ -123,7 +123,7 @@
     NSInteger ms = [TNPlayer shared].positionMs + 300;
     NSInteger line = -1;
     for (NSUInteger i = 0; i < self.lines.count; i++) {
-        if ([self.lines[i][@"ms"] integerValue] <= ms) line = (NSInteger)i; else break;
+        if ([[[self.lines objectAtIndex:i] objectForKey:@"ms"] integerValue] <= ms) line = (NSInteger)i; else break;
     }
     if (line == self.currentLine) return;
     NSInteger old = self.currentLine;
@@ -150,7 +150,7 @@
 - (NSString *)textAt:(NSIndexPath *)ip
 {
     if (self.message) return self.message;
-    if ((NSUInteger)ip.row < self.lines.count) return self.lines[(NSUInteger)ip.row][@"text"];
+    if ((NSUInteger)ip.row < self.lines.count) return [[self.lines objectAtIndex:(NSUInteger)ip.row] objectForKey:@"text"];
     return self.source;
 }
 
@@ -161,7 +161,7 @@
     if (!text.length) return 18;
     BOOL source = (NSUInteger)indexPath.row >= self.lines.count;
     UIFont *font = source ? [[TNTheme shared] smallFont] : [self lineFont];
-    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(tableView.bounds.size.width - 40, 400) lineBreakMode:NSLineBreakByWordWrapping];
+    CGSize s = [text sizeWithFont:font constrainedToSize:CGSizeMake(tableView.bounds.size.width - 40, 400) lineBreakMode:UILineBreakModeWordWrap];
     return ceilf(s.height) + (source ? 24 : 12);
 }
 
@@ -175,7 +175,7 @@
     cell.textLabel.text = [self textAt:indexPath];
     BOOL source = !self.message && (NSUInteger)indexPath.row >= self.lines.count;
     cell.textLabel.font = source ? [[TNTheme shared] smallFont] : [self lineFont];
-    cell.textLabel.textAlignment = self.message ? NSTextAlignmentCenter : NSTextAlignmentLeft;
+    cell.textLabel.textAlignment = self.message ? UITextAlignmentCenter : UITextAlignmentLeft;
     if (self.message || source) {
         cell.textLabel.textColor = [[TNTheme shared] secondaryTextColor];
     } else {
@@ -190,7 +190,7 @@
 {
     // (a line in time: the song jumps there)
     if (!self.synced || self.message || (NSUInteger)indexPath.row >= self.lines.count) return;
-    [[TNPlayer shared] seekToMs:[self.lines[(NSUInteger)indexPath.row][@"ms"] integerValue]];
+    [[TNPlayer shared] seekToMs:[[[self.lines objectAtIndex:(NSUInteger)indexPath.row] objectForKey:@"ms"] integerValue]];
 }
 
 @end
@@ -288,8 +288,8 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
 {
     TNPlayer *p = [TNPlayer shared];
     if (ip.section == TNQueueNow) return p.currentTrack;
-    if (ip.section == TNQueueUser) return p.userQueue[(NSUInteger)ip.row];
-    return self.upcoming[(NSUInteger)ip.row];
+    if (ip.section == TNQueueUser) return [p.userQueue objectAtIndex:(NSUInteger)ip.row];
+    return [self.upcoming objectAtIndex:(NSUInteger)ip.row];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -321,7 +321,7 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     else if (from.section == TNQueueNext) {
         [p moveUpcomingFrom:(NSUInteger)from.row to:(NSUInteger)to.row];
         NSMutableArray *u = [self.upcoming mutableCopy];
-        id x = u[(NSUInteger)from.row];
+        id x = [u objectAtIndex:(NSUInteger)from.row];
         [u removeObjectAtIndex:(NSUInteger)from.row];
         [u insertObject:x atIndex:(NSUInteger)to.row];
         self.upcoming = u;
@@ -411,7 +411,7 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     l.font = font;
     l.textColor = color;
     l.backgroundColor = [UIColor clearColor];
-    l.textAlignment = NSTextAlignmentCenter;
+    l.textAlignment = UITextAlignmentCenter;
     l.shadowColor = [UIColor colorWithWhite:0 alpha:0.7];
     l.shadowOffset = CGSizeMake(0, 1);
     [self.view addSubview:l];
@@ -483,9 +483,9 @@ enum { TNQueueNow, TNQueueUser, TNQueueNext, TNQueueSectionCount };
     [self.progress addTarget:self action:@selector(scrubMoved) forControlEvents:UIControlEventValueChanged];
     [self.view addSubview:self.progress];
     self.elapsedLabel = [self label:[UIFont fontWithName:@"HelveticaNeue" size:12] ?: [UIFont systemFontOfSize:12] color:[theme secondaryTextColor]];
-    self.elapsedLabel.textAlignment = NSTextAlignmentLeft;
+    self.elapsedLabel.textAlignment = UITextAlignmentLeft;
     self.remainingLabel = [self label:[UIFont fontWithName:@"HelveticaNeue" size:12] ?: [UIFont systemFontOfSize:12] color:[theme secondaryTextColor]];
-    self.remainingLabel.textAlignment = NSTextAlignmentRight;
+    self.remainingLabel.textAlignment = UITextAlignmentRight;
     self.formatLabel = [self label:[UIFont fontWithName:@"HelveticaNeue" size:11] ?: [UIFont systemFontOfSize:11] color:[theme tertiaryTextColor]];
     self.playButton = [self button:TNIconPlay size:54 action:@selector(togglePlay)];
     self.previousButton = [self button:TNIconPrevious size:30 action:@selector(previous)];

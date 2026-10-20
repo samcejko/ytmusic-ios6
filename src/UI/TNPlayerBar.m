@@ -83,7 +83,7 @@
             [_progress addTarget:self action:@selector(scrubMoved) forControlEvents:UIControlEventValueChanged];
             [self addSubview:_progress];
             _elapsedLabel = [self label:[UIFont fontWithName:@"HelveticaNeue" size:11] ?: [UIFont systemFontOfSize:11] color:[theme secondaryTextColor]];
-            _elapsedLabel.textAlignment = NSTextAlignmentRight;
+            _elapsedLabel.textAlignment = UITextAlignmentRight;
             _remainingLabel = [self label:[UIFont fontWithName:@"HelveticaNeue" size:11] ?: [UIFont systemFontOfSize:11] color:[theme secondaryTextColor]];
             _volume = [[MPVolumeView alloc] initWithFrame:CGRectZero];
             _volume.showsRouteButton = YES;

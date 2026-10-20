@@ -75,7 +75,7 @@ enum { TNPickOwn, TNPickApple, TNPickSectionCount };
     }
     cell.art.backgroundColor = [UIColor clearColor];
     NSArray *list = indexPath.section == TNPickOwn ? self.own : self.apple;
-    [cell showItem:list[(NSUInteger)indexPath.row - 1]];
+    [cell showItem:[list objectAtIndex:(NSUInteger)indexPath.row - 1]];
     return cell;
 }
 
@@ -108,7 +108,7 @@ enum { TNPickOwn, TNPickApple, TNPickSectionCount };
         }];
         return;
     }
-    TNPlaylist *p = (apple ? self.apple : self.own)[(NSUInteger)indexPath.row - 1];
+    TNPlaylist *p = [(apple ? self.apple : self.own) objectAtIndex:(NSUInteger)indexPath.row - 1];
     if (!apple) {
         NSUInteger added = [[TNLibrary shared] addTracks:tracks toPlaylist:p];
         [TNRouter toast:added ? [NSString stringWithFormat:L(@"Added to %@"), p.name ?: @""] : L(@"Already in this playlist")];

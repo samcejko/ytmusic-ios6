@@ -209,7 +209,7 @@
 {
     if (![self tableView:tableView numberOfRowsInSection:section]) return nil;
     if (section == 0) return TNSectionHeader(L(@"Top songs"), tableView.bounds.size.width);
-    TNShelf *shelf = self.page.shelves[(NSUInteger)section - 1];
+    TNShelf *shelf = [self.page.shelves objectAtIndex:(NSUInteger)section - 1];
     if (shelf.moreBrowseId.length) return TNSectionHeaderWithMore(shelf.title ?: @"", tableView.bounds.size.width, self, @selector(moreTapped:), section - 1);
     return TNSectionHeader(shelf.title ?: @"", tableView.bounds.size.width);
 }
@@ -234,14 +234,14 @@
         }
         TNTrackCell *cell = [tableView dequeueReusableCellWithIdentifier:@"track" forIndexPath:indexPath];
         cell.showsArt = YES;
-        [cell showTrack:self.page.topSongs[(NSUInteger)indexPath.row] number:indexPath.row + 1];
+        [cell showTrack:[self.page.topSongs objectAtIndex:(NSUInteger)indexPath.row] number:indexPath.row + 1];
         [cell.moreButton removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
         [cell.moreButton addTarget:self action:@selector(trackMoreTapped:) forControlEvents:UIControlEventTouchUpInside];
         cell.moreButton.tag = indexPath.row;
         return cell;
     }
     TNShelfCell *cell = [tableView dequeueReusableCellWithIdentifier:@"shelf" forIndexPath:indexPath];
-    [cell showItems:[self.page.shelves[(NSUInteger)indexPath.section - 1] items] cardWidth:TNIsPad() ? 140 : 110];
+    [cell showItems:[[self.page.shelves objectAtIndex:(NSUInteger)indexPath.section - 1] items] cardWidth:TNIsPad() ? 140 : 110];
     cell.onSelect = ^(id item) { [TNRouter openItem:item]; };
     return cell;
 }
@@ -258,7 +258,7 @@
         [TNRouter openPlaylist:p];
         return;
     }
-    TNTrack *t = self.page.topSongs[(NSUInteger)indexPath.row];
+    TNTrack *t = [self.page.topSongs objectAtIndex:(NSUInteger)indexPath.row];
     if ([[TNPlayer shared] isCurrent:t]) { [TNRouter showNowPlaying]; return; }
     [TNPlayer shared].shuffle = NO;
     [[TNPlayer shared] playTracks:self.page.topSongs startingAt:(NSUInteger)indexPath.row contextURI:[@"artist:" stringByAppendingString:self.artist.browseId ?: @""] contextName:self.artist.name];
@@ -267,13 +267,13 @@
 - (void)moreTapped:(UIButton *)sender
 {
     if (sender.tag < 0 || sender.tag >= (NSInteger)self.page.shelves.count) return;
-    TNShelf *shelf = self.page.shelves[(NSUInteger)sender.tag];
+    TNShelf *shelf = [self.page.shelves objectAtIndex:(NSUInteger)sender.tag];
     [TNRouter openBrowseId:shelf.moreBrowseId params:shelf.moreParams title:shelf.title];
 }
 
 - (void)trackMoreTapped:(UIButton *)sender
 {
-    if (sender.tag < (NSInteger)self.page.topSongs.count) [TNRouter showActionsForTrack:self.page.topSongs[(NSUInteger)sender.tag] fromView:sender inController:self];
+    if (sender.tag < (NSInteger)self.page.topSongs.count) [TNRouter showActionsForTrack:[self.page.topSongs objectAtIndex:(NSUInteger)sender.tag] fromView:sender inController:self];
 }
 
 @end

@@ -400,7 +400,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
     CGFloat y = pad + (wide ? 8 : 0);
     self.typeLabel.frame = CGRectMake(x, y, textW, 16);
     y += 18;
-    CGSize t = [self.titleLabel.text ?: @"" sizeWithFont:self.titleLabel.font constrainedToSize:CGSizeMake(textW, wide ? 72 : 54) lineBreakMode:NSLineBreakByTruncatingTail];
+    CGSize t = [self.titleLabel.text ?: @"" sizeWithFont:self.titleLabel.font constrainedToSize:CGSizeMake(textW, wide ? 72 : 54) lineBreakMode:UILineBreakModeTailTruncation];
     self.titleLabel.frame = CGRectMake(x, y, textW, MAX(ceilf(t.height), 26));
     y += MAX(ceilf(t.height), 26) + 4;
     self.infoLabel.frame = CGRectMake(x, y, textW, 34);
@@ -664,7 +664,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     TNTrackCell *cell = [tableView dequeueReusableCellWithIdentifier:TNTrackCellId forIndexPath:indexPath];
-    TNTrack *t = self.tracks[(NSUInteger)indexPath.row];
+    TNTrack *t = [self.tracks objectAtIndex:(NSUInteger)indexPath.row];
     cell.showsArt = self.kind != TNListAlbum;
     cell.showsAlbum = self.kind != TNListPlaylist || TNIsPad();
     [cell showTrack:t number:self.kind == TNListAlbum ? (t.trackNumber ?: indexPath.row + 1) : 0];
@@ -688,7 +688,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)from toIndexPath:(NSIndexPath *)to
 {
     NSMutableArray *tracks = [self.tracks mutableCopy];
-    id t = tracks[(NSUInteger)from.row];
+    id t = [tracks objectAtIndex:(NSUInteger)from.row];
     [tracks removeObjectAtIndex:(NSUInteger)from.row];
     [tracks insertObject:t atIndex:(NSUInteger)to.row];
     self.tracks = tracks;
@@ -704,7 +704,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (void)removeTrackAt:(NSUInteger)row
 {
     if (row >= self.tracks.count) return;
-    TNTrack *t = self.tracks[row];
+    TNTrack *t = [self.tracks objectAtIndex:row];
     NSMutableArray *tracks = [self.tracks mutableCopy];
     [tracks removeObjectAtIndex:row];
     self.mutating = YES;   // (the change notifications leave the rows alone meanwhile)
@@ -719,7 +719,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    TNTrack *t = self.tracks[(NSUInteger)indexPath.row];
+    TNTrack *t = [self.tracks objectAtIndex:(NSUInteger)indexPath.row];
     if ([[TNPlayer shared] isCurrent:t]) { [TNRouter showNowPlaying]; return; }
     if (!t.playable) {
         // (an Apple Music song that was not found: the user may pick its YouTube version)
@@ -734,7 +734,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
 - (void)moreTapped:(UIButton *)sender
 {
     if (sender.tag < 0 || sender.tag >= (NSInteger)self.tracks.count) return;
-    TNTrack *t = self.tracks[(NSUInteger)sender.tag];
+    TNTrack *t = [self.tracks objectAtIndex:(NSUInteger)sender.tag];
     if (self.kind == TNListOwn) {
         __weak TNTrackListViewController *weakSelf = self;
         [TNRouter showActionsForTrack:t fromView:sender inController:self removeTitle:L(@"Remove from this playlist") remove:^{

@@ -185,7 +185,7 @@ static NSString *TNHTML(NSString *s)
     if ([requestLine hasPrefix:@"POST /token"]) {
         NSData *bodyData = data.length > headerEnd ? [data subdataWithRange:NSMakeRange(headerEnd, data.length - headerEnd)] : [NSData data];
         NSString *body = [[NSString alloc] initWithData:bodyData encoding:NSUTF8StringEncoding] ?: @"";
-        NSString *token = [[TNUtils parseQuery:[body stringByReplacingOccurrencesOfString:@"+" withString:@" "]][@"token"]
+        NSString *token = [[[TNUtils parseQuery:[body stringByReplacingOccurrencesOfString:@"+" withString:@" "]] objectForKey:@"token"]
                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (token.length) {
             void (^handler)(NSString *) = self.handler;

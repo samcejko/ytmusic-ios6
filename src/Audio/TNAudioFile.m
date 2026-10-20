@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNAudioFile.h"
 #import "TNHTTPRequest.h"
 #import "TNSettings.h"
@@ -134,7 +135,7 @@ static const NSUInteger TNMaxAudioFile = 64 * 1024 * 1024;
     }
     TNHTTPRequest *r = [[TNHTTPRequest alloc] initWithMethod:@"GET" URL:url];
     NSMutableDictionary *headers = [NSMutableDictionary dictionaryWithDictionary:@{ @"Accept": @"*/*" }];
-    headers[@"Range"] = [NSString stringWithFormat:@"bytes=%lu-", (unsigned long)offset];
+    TNLegacyDictionarySet(headers, @"Range", [NSString stringWithFormat:@"bytes=%lu-", (unsigned long)offset]);
     r.headers = headers;
     r.verifyTLS = [TNSettings verifyTLS];
     r.noCompression = YES;
@@ -150,14 +151,14 @@ static const NSUInteger TNMaxAudioFile = 64 * 1024 * 1024;
         TNAudioFile *me = weakSelf;
         status = s;
         me.lastStatus = s;
-        if (s >= 300 && s < 400) { location = h[@"location"]; bad = YES; [weakRequest cancel]; return; }
+        if (s >= 300 && s < 400) { location = [h objectForKey:@"location"]; bad = YES; [weakRequest cancel]; return; }
         if (!me || (s != 200 && s != 206)) { bad = YES; [weakRequest cancel]; return; }
         if (s == 200 && offset) { bad = YES; [weakRequest cancel]; return; }   // (the range was ignored)
         NSUInteger total = 0;
-        NSString *range = h[@"content-range"];   // "bytes 1000-9999/10000"
+        NSString *range = [h objectForKey:@"content-range"];   // "bytes 1000-9999/10000"
         NSRange slash = [range rangeOfString:@"/"];
         if (slash.location != NSNotFound) total = (NSUInteger)[[range substringFromIndex:slash.location + 1] longLongValue];
-        if (!total) total = (NSUInteger)[h[@"content-length"] longLongValue] + offset;
+        if (!total) total = (NSUInteger)[[h objectForKey:@"content-length"] longLongValue] + offset;
         [me prepareForLength:total];
         if (![me bytes]) { bad = YES; [weakRequest cancel]; }
     };

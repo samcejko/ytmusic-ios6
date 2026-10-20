@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNLibraryViewController.h"
 #import "TNCells.h"
 #import "TNRouter.h"
@@ -173,14 +174,14 @@
         NSString *artist = t.byline.length ? t.byline : L(@"Unknown artist");
         NSString *key = albums ? [NSString stringWithFormat:@"%@|%@", [t.album.name ?: @"" lowercaseString], [artist lowercaseString]] : [artist lowercaseString];
         if (albums && !t.album.name.length) continue;
-        NSMutableArray *list = groups[key];
-        if (!list) { list = [NSMutableArray array]; groups[key] = list; [order addObject:key]; }
+        NSMutableArray *list = [groups objectForKey:key];
+        if (!list) { list = [NSMutableArray array]; TNLegacyDictionarySet(groups, key, list); [order addObject:key]; }
         [list addObject:t];
     }
     [order sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [a localizedCaseInsensitiveCompare:b]; }];
     NSMutableArray *items = [NSMutableArray array], *tracks = [NSMutableArray array];
     for (NSString *key in order) {
-        NSMutableArray *list = groups[key];
+        NSMutableArray *list = [groups objectForKey:key];
         TNTrack *first = list.firstObject;
         TNArtist *artist = [[TNArtist alloc] init];
         artist.name = first.byline.length ? first.byline : L(@"Unknown artist");
@@ -297,17 +298,17 @@
     TNTheme *theme = [TNTheme shared];
     NSUInteger row = (NSUInteger)indexPath.row;
     if (row < self.fixedRows.count) {
-        NSDictionary *d = self.fixedRows[row];
+        NSDictionary *d = [self.fixedRows objectAtIndex:row];
         cell.round = NO;
-        [cell showTitle:d[@"title"] subtitle:d[@"subtitle"] imageURL:nil];
-        TNIcon icon = (TNIcon)[d[@"icon"] integerValue];
+        [cell showTitle:[d objectForKey:@"title"] subtitle:[d objectForKey:@"subtitle"] imageURL:nil];
+        TNIcon icon = (TNIcon)[[d objectForKey:@"icon"] integerValue];
         cell.art.image = icon == TNIconCloud ? [theme appleMarkWithSize:52] : [theme icon:icon size:28 color:[theme accentTextColor]];
         cell.art.contentMode = UIViewContentModeCenter;
         cell.art.backgroundColor = icon == TNIconCloud ? [UIColor clearColor] : [theme rowHighlightColor];
         return cell;
     }
     cell.art.backgroundColor = [UIColor clearColor];
-    [cell showItem:self.items[row - self.fixedRows.count]];
+    [cell showItem:[self.items objectAtIndex:row - self.fixedRows.count]];
     return cell;
 }
 
@@ -316,7 +317,7 @@
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSUInteger row = (NSUInteger)indexPath.row;
     if (row < self.fixedRows.count) {
-        NSString *action = self.fixedRows[row][@"action"];
+        NSString *action = [[self.fixedRows objectAtIndex:row] objectForKey:@"action"];
         if ([action isEqualToString:@"liked"]) [TNRouter openLikedSongs];
         else if ([action isEqualToString:@"recent"]) [TNRouter openRecent];
         else if ([action isEqualToString:@"apple"]) [TNRouter push:[[TNLibraryViewController alloc] initWithMode:TNLibraryApple switcher:NO]];
@@ -336,19 +337,19 @@
     }
     NSUInteger index = row - self.fixedRows.count;
     if (self.itemTracks && index < self.itemTracks.count) {
-        id item = self.items[index];
+        id item = [self.items objectAtIndex:index];
         NSString *title = [item isKindOfClass:[TNAlbum class]] ? ((TNAlbum *)item).name : ((TNArtist *)item).name;
-        [TNRouter push:[[TNTrackListViewController alloc] initWithTracks:self.itemTracks[index] title:title contextURI:[@"am:group:" stringByAppendingString:title ?: @""]]];
+        [TNRouter push:[[TNTrackListViewController alloc] initWithTracks:[self.itemTracks objectAtIndex:index] title:title contextURI:[@"am:group:" stringByAppendingString:title ?: @""]]];
         return;
     }
-    [TNRouter openItem:self.items[index]];
+    [TNRouter openItem:[self.items objectAtIndex:index]];
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
 {
     NSUInteger row = (NSUInteger)indexPath.row;
     if (row < self.fixedRows.count || self.mode >= TNLibraryAppleAlbums) return NO;
-    id item = self.items[row - self.fixedRows.count];
+    id item = [self.items objectAtIndex:row - self.fixedRows.count];
     return !([item isKindOfClass:[TNPlaylist class]] && ((TNPlaylist *)item).fromLibrary);
 }
 
@@ -359,7 +360,7 @@
     if (editingStyle != UITableViewCellEditingStyleDelete) return;
     NSUInteger row = (NSUInteger)indexPath.row;
     if (row < self.fixedRows.count) return;
-    id item = self.items[row - self.fixedRows.count];
+    id item = [self.items objectAtIndex:row - self.fixedRows.count];
     TNLibrary *library = [TNLibrary shared];
     if ([item isKindOfClass:[TNPlaylist class]]) [library setSaved:NO playlist:item];
     else if ([item isKindOfClass:[TNAlbum class]]) [library setSaved:NO album:item];

@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNYTMusic.h"
 #import "TNHTTPRequest.h"
 #import "TNSettings.h"
@@ -31,9 +32,9 @@ static id TNAt(id node, NSString *path)
         if (c >= '0' && c <= '9') {
             NSArray *a = TNArr(node);
             NSUInteger i = (NSUInteger)[part integerValue];
-            node = i < a.count ? a[i] : nil;
+            node = i < a.count ? [a objectAtIndex:i] : nil;
         } else {
-            node = TNDict(node)[part];
+            node = [TNDict(node) objectForKey:part];
         }
     }
     return node;
@@ -41,16 +42,16 @@ static id TNAt(id node, NSString *path)
 
 static NSArray *TNRunsOf(id text)
 {
-    NSArray *runs = TNArr(TNDict(text)[@"runs"]);
+    NSArray *runs = TNArr([TNDict(text) objectForKey:@"runs"]);
     if (runs) return runs;
-    NSString *simple = TNStr(TNDict(text)[@"simpleText"]);
+    NSString *simple = TNStr([TNDict(text) objectForKey:@"simpleText"]);
     return simple ? @[ @{ @"text": simple } ] : @[];
 }
 
 static NSString *TNText(id text)
 {
     NSMutableString *s = [NSMutableString string];
-    for (id r in TNRunsOf(text)) [s appendString:TNStr(TNDict(r)[@"text"]) ?: @""];
+    for (id r in TNRunsOf(text)) [s appendString:TNStr([TNDict(r) objectForKey:@"text"]) ?: @""];
     return s.length ? s : nil;
 }
 
@@ -78,7 +79,7 @@ static NSArray *TNThumbsOf(NSDictionary *r)
 static BOOL TNHasExplicitBadge(NSDictionary *r)
 {
     for (NSString *key in @[ @"badges", @"subtitleBadges", @"subtitleBadge" ]) {
-        for (id b in TNArr(r[key]) ?: @[]) {
+        for (id b in TNArr([r objectForKey:key]) ?: @[]) {
             NSString *icon = TNStr(TNAt(b, @"musicInlineBadgeRenderer.icon.iconType"));
             if ([icon isEqualToString:@"MUSIC_EXPLICIT_BADGE"]) return YES;
         }
@@ -109,7 +110,7 @@ static BOOL TNIsYear(NSString *s)
 static NSArray *TNSegments(NSArray *runs)
 {
     NSMutableString *all = [NSMutableString string];
-    for (id r in runs) [all appendString:TNStr(TNDict(r)[@"text"]) ?: @""];
+    for (id r in runs) [all appendString:TNStr([TNDict(r) objectForKey:@"text"]) ?: @""];
     NSMutableArray *out = [NSMutableArray array];
     for (NSString *part in [all componentsSeparatedByString:@" • "]) {
         NSString *t = [part stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
@@ -133,8 +134,8 @@ static TNArtist *TNArtistFromRun(NSDictionary *run)
     NSString *type = TNPageType(browse);
     if (!browse || !([type isEqualToString:@"MUSIC_PAGE_TYPE_ARTIST"] || [type isEqualToString:@"MUSIC_PAGE_TYPE_USER_CHANNEL"])) return nil;
     TNArtist *a = [[TNArtist alloc] init];
-    a.browseId = TNStr(browse[@"browseId"]);
-    a.name = TNStr(run[@"text"]);
+    a.browseId = TNStr([browse objectForKey:@"browseId"]);
+    a.name = TNStr([run objectForKey:@"text"]);
     return a.name.length ? a : nil;
 }
 
@@ -143,8 +144,8 @@ static TNAlbum *TNAlbumFromRun(NSDictionary *run)
     NSDictionary *browse = TNDict(TNAt(run, @"navigationEndpoint.browseEndpoint"));
     if (![TNPageType(browse) isEqualToString:@"MUSIC_PAGE_TYPE_ALBUM"]) return nil;
     TNAlbum *a = [[TNAlbum alloc] init];
-    a.browseId = TNStr(browse[@"browseId"]);
-    a.name = TNStr(run[@"text"]);
+    a.browseId = TNStr([browse objectForKey:@"browseId"]);
+    a.name = TNStr([run objectForKey:@"text"]);
     return a.name.length ? a : nil;
 }
 
@@ -154,7 +155,7 @@ static void TNFillTrackFromRuns(TNTrack *t, NSArray *runs)
     NSMutableArray *artists = [NSMutableArray arrayWithArray:t.artists ?: @[]];
     NSInteger firstArtist = -1, lastArtist = -1;
     for (NSUInteger i = 0; i < runs.count; i++) {
-        NSDictionary *run = TNDict(runs[i]);
+        NSDictionary *run = TNDict([runs objectAtIndex:i]);
         TNArtist *artist = TNArtistFromRun(run);
         if (artist) {
             [artists addObject:artist];
@@ -164,14 +165,14 @@ static void TNFillTrackFromRuns(TNTrack *t, NSArray *runs)
         }
         TNAlbum *album = TNAlbumFromRun(run);
         if (album) { if (!t.album) t.album = album; continue; }
-        NSString *text = TNStr(run[@"text"]);
+        NSString *text = TNStr([run objectForKey:@"text"]);
         NSInteger ms = TNParseDurationMs(text);
         if (ms && !t.durationMs) t.durationMs = ms;
     }
     t.artists = artists;
     if (firstArtist >= 0 && !t.byline.length) {
         NSMutableString *by = [NSMutableString string];
-        for (NSInteger i = firstArtist; i <= lastArtist; i++) [by appendString:TNStr(TNDict(runs[(NSUInteger)i])[@"text"]) ?: @""];
+        for (NSInteger i = firstArtist; i <= lastArtist; i++) [by appendString:TNStr([TNDict([runs objectAtIndex:(NSUInteger)i]) objectForKey:@"text"]) ?: @""];
         t.byline = by;
     }
     for (NSString *seg in TNSegments(runs)) {
@@ -185,29 +186,29 @@ static void TNFillTrackFromRuns(TNTrack *t, NSArray *runs)
 
 static NSString *TNVideoTypeOf(NSDictionary *nav)
 {
-    return TNMusicVideoType(TNDict(nav[@"watchEndpoint"]));
+    return TNMusicVideoType(TNDict([nav objectForKey:@"watchEndpoint"]));
 }
 
 #pragma mark - Items
 
 static id TNItemFromListItem(NSDictionary *r)
 {
-    NSArray *columns = TNArr(r[@"flexColumns"]) ?: @[];
+    NSArray *columns = TNArr([r objectForKey:@"flexColumns"]) ?: @[];
     NSMutableArray *columnRuns = [NSMutableArray array];
     for (id c in columns) [columnRuns addObject:TNRunsOf(TNAt(c, @"musicResponsiveListItemFlexColumnRenderer.text"))];
-    NSArray *runs0 = columnRuns.count ? columnRuns[0] : @[];
+    NSArray *runs0 = columnRuns.count ? [columnRuns objectAtIndex:0] : @[];
     NSString *title = TNText(TNAt(columns.firstObject, @"musicResponsiveListItemFlexColumnRenderer.text"));
     if (!title.length) return nil;
-    NSDictionary *nav0 = TNDict(TNDict(runs0.firstObject)[@"navigationEndpoint"]);
+    NSDictionary *nav0 = TNDict([TNDict(runs0.firstObject) objectForKey:@"navigationEndpoint"]);
     NSDictionary *browse = TNDict(TNAt(r, @"navigationEndpoint.browseEndpoint"));
     NSDictionary *play = TNDict(TNAt(r, @"overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint"));
-    NSArray *line = columnRuns.count > 1 ? columnRuns[1] : @[];
+    NSArray *line = columnRuns.count > 1 ? [columnRuns objectAtIndex:1] : @[];
     NSArray *segments = TNSegments(line);
     NSArray *thumbs = TNThumbsOf(r);
 
     NSString *pageType = TNPageType(browse);
     if (browse && pageType) {
-        NSString *browseId = TNStr(browse[@"browseId"]);
+        NSString *browseId = TNStr([browse objectForKey:@"browseId"]);
         if ([pageType isEqualToString:@"MUSIC_PAGE_TYPE_ALBUM"]) {
             TNAlbum *a = [[TNAlbum alloc] init];
             a.browseId = browseId;
@@ -269,9 +270,9 @@ static id TNItemFromListItem(NSDictionary *r)
     t.explicitContent = TNHasExplicitBadge(r);
     t.isVideo = videoType.length && ![videoType isEqualToString:@"MUSIC_VIDEO_TYPE_ATV"];
     t.setVideoId = TNStr(TNAt(r, @"playlistItemData.playlistSetVideoId"));
-    t.trackNumber = [TNText(r[@"index"]) integerValue];
-    for (NSUInteger i = 1; i < columnRuns.count; i++) TNFillTrackFromRuns(t, columnRuns[i]);
-    for (id c in TNArr(r[@"fixedColumns"]) ?: @[]) {
+    t.trackNumber = [TNText([r objectForKey:@"index"]) integerValue];
+    for (NSUInteger i = 1; i < columnRuns.count; i++) TNFillTrackFromRuns(t, [columnRuns objectAtIndex:i]);
+    for (id c in TNArr([r objectForKey:@"fixedColumns"]) ?: @[]) {
         NSInteger ms = TNParseDurationMs(TNText(TNAt(c, @"musicResponsiveListItemFixedColumnRenderer.text")));
         if (ms) t.durationMs = ms;
     }
@@ -280,15 +281,15 @@ static id TNItemFromListItem(NSDictionary *r)
 
 static id TNItemFromTwoRow(NSDictionary *r)
 {
-    NSString *title = TNText(r[@"title"]);
+    NSString *title = TNText([r objectForKey:@"title"]);
     if (!title.length) return nil;
-    NSDictionary *nav = TNDict(r[@"navigationEndpoint"]);
-    NSDictionary *browse = TNDict(nav[@"browseEndpoint"]);
-    NSArray *subRuns = TNRunsOf(r[@"subtitle"]);
+    NSDictionary *nav = TNDict([r objectForKey:@"navigationEndpoint"]);
+    NSDictionary *browse = TNDict([nav objectForKey:@"browseEndpoint"]);
+    NSArray *subRuns = TNRunsOf([r objectForKey:@"subtitle"]);
     NSArray *segments = TNSegments(subRuns);
     NSArray *thumbs = TNThumbsOf(r);
     NSString *pageType = TNPageType(browse);
-    NSString *browseId = TNStr(browse[@"browseId"]);
+    NSString *browseId = TNStr([browse objectForKey:@"browseId"]);
     if ([pageType isEqualToString:@"MUSIC_PAGE_TYPE_ALBUM"]) {
         TNAlbum *a = [[TNAlbum alloc] init];
         a.browseId = browseId;
@@ -310,7 +311,7 @@ static id TNItemFromTwoRow(NSDictionary *r)
         a.browseId = browseId;
         a.name = title;
         a.thumbnails = thumbs;
-        a.subtitle = TNText(r[@"subtitle"]);
+        a.subtitle = TNText([r objectForKey:@"subtitle"]);
         return a;
     }
     if ([pageType isEqualToString:@"MUSIC_PAGE_TYPE_PLAYLIST"]) {
@@ -331,8 +332,8 @@ static id TNItemFromTwoRow(NSDictionary *r)
         p.descriptionText = [rest componentsJoinedByString:@" • "];
         return p;
     }
-    NSDictionary *watch = TNDict(nav[@"watchEndpoint"]);
-    NSString *videoId = TNStr(watch[@"videoId"]);
+    NSDictionary *watch = TNDict([nav objectForKey:@"watchEndpoint"]);
+    NSString *videoId = TNStr([watch objectForKey:@"videoId"]);
     if (!videoId.length) return nil;
     NSString *videoType = TNMusicVideoType(watch);
     if ([videoType isEqualToString:@"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"]) return nil;
@@ -349,12 +350,12 @@ static id TNItemFromTwoRow(NSDictionary *r)
 static TNCategory *TNCategoryFromButton(NSDictionary *r)
 {
     NSDictionary *browse = TNDict(TNAt(r, @"clickCommand.browseEndpoint"));
-    NSString *title = TNText(r[@"buttonText"]);
-    if (!title.length || !TNStr(browse[@"browseId"]).length) return nil;
+    NSString *title = TNText([r objectForKey:@"buttonText"]);
+    if (!title.length || !TNStr([browse objectForKey:@"browseId"]).length) return nil;
     TNCategory *c = [[TNCategory alloc] init];
     c.title = title;
-    c.browseId = TNStr(browse[@"browseId"]);
-    c.params = TNStr(browse[@"params"]);
+    c.browseId = TNStr([browse objectForKey:@"browseId"]);
+    c.params = TNStr([browse objectForKey:@"params"]);
     long long argb = [TNStr(TNAt(r, @"solid.leftStripeColor")) longLongValue];
     if (argb) c.colorHex = [NSString stringWithFormat:@"#%06llX", argb & 0xFFFFFF];
     return c;
@@ -362,30 +363,30 @@ static TNCategory *TNCategoryFromButton(NSDictionary *r)
 
 static TNTrack *TNTrackFromPanelVideo(NSDictionary *r)
 {
-    NSString *videoId = TNStr(r[@"videoId"]) ?: TNStr(TNAt(r, @"navigationEndpoint.watchEndpoint.videoId"));
-    NSString *title = TNText(r[@"title"]);
+    NSString *videoId = TNStr([r objectForKey:@"videoId"]) ?: TNStr(TNAt(r, @"navigationEndpoint.watchEndpoint.videoId"));
+    NSString *title = TNText([r objectForKey:@"title"]);
     if (!videoId.length || !title.length) return nil;
     TNTrack *t = [[TNTrack alloc] init];
     t.videoId = videoId;
     t.name = title;
     t.thumbnails = TNThumbsOf(r);
-    t.durationMs = TNParseDurationMs(TNText(r[@"lengthText"]));
+    t.durationMs = TNParseDurationMs(TNText([r objectForKey:@"lengthText"]));
     NSString *videoType = TNMusicVideoType(TNDict(TNAt(r, @"navigationEndpoint.watchEndpoint")));
     t.isVideo = videoType.length && ![videoType isEqualToString:@"MUSIC_VIDEO_TYPE_ATV"];
     t.explicitContent = TNHasExplicitBadge(r);
-    t.setVideoId = TNStr(r[@"playlistSetVideoId"]);
-    TNFillTrackFromRuns(t, TNRunsOf(r[@"longBylineText"]));
-    if (!t.byline.length) t.byline = TNText(r[@"shortBylineText"]);
+    t.setVideoId = TNStr([r objectForKey:@"playlistSetVideoId"]);
+    TNFillTrackFromRuns(t, TNRunsOf([r objectForKey:@"longBylineText"]));
+    if (!t.byline.length) t.byline = TNText([r objectForKey:@"shortBylineText"]);
     return t;
 }
 
 static id TNItemFrom(NSDictionary *wrapper)
 {
     NSDictionary *r;
-    if ((r = TNDict(wrapper[@"musicResponsiveListItemRenderer"]))) return TNItemFromListItem(r);
-    if ((r = TNDict(wrapper[@"musicTwoRowItemRenderer"]))) return TNItemFromTwoRow(r);
-    if ((r = TNDict(wrapper[@"musicNavigationButtonRenderer"]))) return TNCategoryFromButton(r);
-    if ((r = TNDict(wrapper[@"playlistPanelVideoRenderer"]))) return TNTrackFromPanelVideo(r);
+    if ((r = TNDict([wrapper objectForKey:@"musicResponsiveListItemRenderer"]))) return TNItemFromListItem(r);
+    if ((r = TNDict([wrapper objectForKey:@"musicTwoRowItemRenderer"]))) return TNItemFromTwoRow(r);
+    if ((r = TNDict([wrapper objectForKey:@"musicNavigationButtonRenderer"]))) return TNCategoryFromButton(r);
+    if ((r = TNDict([wrapper objectForKey:@"playlistPanelVideoRenderer"]))) return TNTrackFromPanelVideo(r);
     if ((r = TNDict(TNAt(wrapper, @"playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer")))) return TNTrackFromPanelVideo(r);
     return nil;
 }
@@ -405,7 +406,7 @@ static NSString *TNContinuationIn(NSArray *contents, NSDictionary *renderer)
     // the newer kind: a last item carrying the token; the older: "continuations" of the renderer
     NSString *token = TNStr(TNAt([contents lastObject], @"continuationItemRenderer.continuationEndpoint.continuationCommand.token"));
     if (token.length) return token;
-    for (id c in TNArr(renderer[@"continuations"]) ?: @[]) {
+    for (id c in TNArr([renderer objectForKey:@"continuations"]) ?: @[]) {
         token = TNStr(TNAt(c, @"nextContinuationData.continuation")) ?: TNStr(TNAt(c, @"nextRadioContinuationData.continuation"));
         if (token.length) return token;
     }
@@ -424,16 +425,16 @@ static BOOL TNAllTracks(NSArray *items)
 // The top result of a search: a card with its own title, picture and link
 static id TNTopResultFromCard(NSDictionary *r)
 {
-    NSDictionary *titleRun = TNDict([TNRunsOf(r[@"title"]) firstObject]);
-    NSString *title = TNStr(titleRun[@"text"]);
+    NSDictionary *titleRun = TNDict([TNRunsOf([r objectForKey:@"title"]) firstObject]);
+    NSString *title = TNStr([titleRun objectForKey:@"text"]);
     if (!title.length) return nil;
-    NSDictionary *nav = TNDict(titleRun[@"navigationEndpoint"]) ?: TNDict(TNAt(r, @"onTap"));
+    NSDictionary *nav = TNDict([titleRun objectForKey:@"navigationEndpoint"]) ?: TNDict(TNAt(r, @"onTap"));
     NSMutableDictionary *fake = [NSMutableDictionary dictionary];
-    fake[@"title"] = @{ @"runs": @[ @{ @"text": title } ] };
-    if (r[@"subtitle"]) fake[@"subtitle"] = r[@"subtitle"];
-    if (nav) fake[@"navigationEndpoint"] = nav;
+    TNLegacyDictionarySet(fake, @"title", @{ @"runs": @[ @{ @"text": title } ] });
+    if ([r objectForKey:@"subtitle"]) TNLegacyDictionarySet(fake, @"subtitle", [r objectForKey:@"subtitle"]);
+    if (nav) TNLegacyDictionarySet(fake, @"navigationEndpoint", nav);
     NSArray *thumbs = TNThumbsOf(r);
-    if (thumbs) fake[@"thumbnail"] = @{ @"thumbnails": thumbs };
+    if (thumbs) TNLegacyDictionarySet(fake, @"thumbnail", @{ @"thumbnails": thumbs });
     return TNItemFromTwoRow(fake);
 }
 
@@ -441,27 +442,27 @@ static TNShelf *TNShelfFrom(NSDictionary *section)
 {
     NSDictionary *r;
     TNShelf *shelf = [[TNShelf alloc] init];
-    if ((r = TNDict(section[@"musicCarouselShelfRenderer"])) || (r = TNDict(section[@"musicImmersiveCarouselShelfRenderer"]))) {
+    if ((r = TNDict([section objectForKey:@"musicCarouselShelfRenderer"])) || (r = TNDict([section objectForKey:@"musicImmersiveCarouselShelfRenderer"]))) {
         NSDictionary *header = TNDict(TNAt(r, @"header.musicCarouselShelfBasicHeaderRenderer")) ?: TNDict(TNAt(r, @"header.musicImmersiveCarouselShelfBasicHeaderRenderer"));
-        shelf.title = TNText(header[@"title"]);
-        shelf.strapline = TNText(header[@"strapline"]);
+        shelf.title = TNText([header objectForKey:@"title"]);
+        shelf.strapline = TNText([header objectForKey:@"strapline"]);
         NSDictionary *more = TNDict(TNAt(header, @"moreContentButton.buttonRenderer.navigationEndpoint.browseEndpoint")) ?:
-                             TNDict(TNAt([TNRunsOf(header[@"title"]) firstObject], @"navigationEndpoint.browseEndpoint"));
-        shelf.moreBrowseId = TNStr(more[@"browseId"]);
-        shelf.moreParams = TNStr(more[@"params"]);
-        shelf.items = TNItemsFrom(TNArr(r[@"contents"]));
-    } else if ((r = TNDict(section[@"musicShelfRenderer"])) || (r = TNDict(section[@"musicPlaylistShelfRenderer"]))) {
-        shelf.title = TNText(r[@"title"]);
-        NSDictionary *more = TNDict(TNAt(r, @"bottomEndpoint.browseEndpoint")) ?: TNDict(TNAt([TNRunsOf(r[@"title"]) firstObject], @"navigationEndpoint.browseEndpoint"));
-        shelf.moreBrowseId = TNStr(more[@"browseId"]);
-        shelf.moreParams = TNStr(more[@"params"]);
-        shelf.items = TNItemsFrom(TNArr(r[@"contents"]));
-    } else if ((r = TNDict(section[@"musicCardShelfRenderer"]))) {
+                             TNDict(TNAt([TNRunsOf([header objectForKey:@"title"]) firstObject], @"navigationEndpoint.browseEndpoint"));
+        shelf.moreBrowseId = TNStr([more objectForKey:@"browseId"]);
+        shelf.moreParams = TNStr([more objectForKey:@"params"]);
+        shelf.items = TNItemsFrom(TNArr([r objectForKey:@"contents"]));
+    } else if ((r = TNDict([section objectForKey:@"musicShelfRenderer"])) || (r = TNDict([section objectForKey:@"musicPlaylistShelfRenderer"]))) {
+        shelf.title = TNText([r objectForKey:@"title"]);
+        NSDictionary *more = TNDict(TNAt(r, @"bottomEndpoint.browseEndpoint")) ?: TNDict(TNAt([TNRunsOf([r objectForKey:@"title"]) firstObject], @"navigationEndpoint.browseEndpoint"));
+        shelf.moreBrowseId = TNStr([more objectForKey:@"browseId"]);
+        shelf.moreParams = TNStr([more objectForKey:@"params"]);
+        shelf.items = TNItemsFrom(TNArr([r objectForKey:@"contents"]));
+    } else if ((r = TNDict([section objectForKey:@"musicCardShelfRenderer"]))) {
         shelf.title = L(@"Top result");
         NSMutableArray *items = [NSMutableArray array];
         id top = TNTopResultFromCard(r);
         if (top) [items addObject:top];
-        for (id item in TNItemsFrom(TNArr(r[@"contents"]))) {
+        for (id item in TNItemsFrom(TNArr([r objectForKey:@"contents"]))) {
             // (the songs under an artist's card come without the artist: it is the card's)
             if ([top isKindOfClass:[TNArtist class]] && [item isKindOfClass:[TNTrack class]] && ![(TNTrack *)item artistNames].length) {
                 ((TNTrack *)item).artists = @[ top ];
@@ -470,11 +471,11 @@ static TNShelf *TNShelfFrom(NSDictionary *section)
             [items addObject:item];
         }
         shelf.items = items;
-    } else if ((r = TNDict(section[@"gridRenderer"]))) {
+    } else if ((r = TNDict([section objectForKey:@"gridRenderer"]))) {
         shelf.title = TNText(TNAt(r, @"header.gridHeaderRenderer.title"));
-        shelf.items = TNItemsFrom(TNArr(r[@"items"]));
-    } else if ((r = TNDict(section[@"itemSectionRenderer"]))) {
-        shelf.items = TNItemsFrom(TNArr(r[@"contents"]));
+        shelf.items = TNItemsFrom(TNArr([r objectForKey:@"items"]));
+    } else if ((r = TNDict([section objectForKey:@"itemSectionRenderer"]))) {
+        shelf.items = TNItemsFrom(TNArr([r objectForKey:@"contents"]));
     } else {
         return nil;
     }
@@ -498,9 +499,9 @@ static NSDictionary *TNFindKey(id node, NSString *key, int depth)
     if (depth > 12) return nil;
     if ([node isKindOfClass:[NSDictionary class]]) {
         NSDictionary *d = node;
-        if (TNDict(d[key])) return d[key];
+        if (TNDict([d objectForKey:key])) return [d objectForKey:key];
         for (NSString *k in d) {
-            id v = d[k];
+            id v = [d objectForKey:k];
             if (![v isKindOfClass:[NSDictionary class]] && ![v isKindOfClass:[NSArray class]]) continue;
             NSDictionary *found = TNFindKey(v, key, depth + 1);
             if (found) return found;
@@ -585,8 +586,8 @@ static NSDictionary *TNFindKey(id node, NSString *key, int depth)
 + (NSDictionary *)callSync:(NSString *)endpoint body:(NSDictionary *)body error:(NSError **)error
 {
     NSMutableDictionary *full = body ? [body mutableCopy] : [NSMutableDictionary dictionary];
-    full[@"context"] = @{ @"client": @{ @"clientName": @"WEB_REMIX", @"clientVersion": TNYTMVersion,
-                                         @"hl": [self language], @"gl": [self region] } };
+    TNLegacyDictionarySet(full, @"context", @{ @"client": @{ @"clientName": @"WEB_REMIX", @"clientVersion": TNYTMVersion,
+                                         @"hl": [self language], @"gl": [self region] } });
     NSData *data = [TNUtils JSONDataFromObject:full];
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@?prettyPrint=false", TNYTMBase, endpoint]];
     NSError *failure = nil;
@@ -663,17 +664,17 @@ static dispatch_queue_t TNYTMQueue(void)
 {
     return [self run:^id(NSError **error) {
         NSMutableDictionary *body = [NSMutableDictionary dictionaryWithObject:browseId ?: @"" forKey:@"browseId"];
-        if (params.length) body[@"params"] = params;
+        if (params.length) TNLegacyDictionarySet(body, @"params", params);
         NSDictionary *json = [self callSync:@"browse" body:body error:error];
         if (!json) return nil;
-        NSDictionary *list = TNFindKey(json[@"contents"], @"sectionListRenderer", 0);
-        NSArray *shelves = TNShelvesFrom(TNArr(list[@"contents"]));
+        NSDictionary *list = TNFindKey([json objectForKey:@"contents"], @"sectionListRenderer", 0);
+        NSArray *shelves = TNShelvesFrom(TNArr([list objectForKey:@"contents"]));
         NSString *title = TNText(TNAt(json, @"header.musicHeaderRenderer.title")) ?: TNText(TNAt(json, @"header.musicImmersiveHeaderRenderer.title")) ?: @"";
         TNLog(@"browse %@: %lu shelves", browseId, (unsigned long)shelves.count);
         return @[ title, shelves ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        completion(result.count ? result[0] : nil, result.count ? result[1] : nil, error);
+        completion(result.count ? [result objectAtIndex:0] : nil, result.count ? [result objectAtIndex:1] : nil, error);
     }];
 }
 
@@ -696,10 +697,10 @@ static NSArray *TNGroupResults(NSArray *shelves)
     }
     NSArray *groups = @[ @[ L(@"Songs"), songs ], @[ L(@"Videos"), videos ], @[ L(@"Albums"), albums ], @[ L(@"Artists"), artists ], @[ L(@"Playlists"), playlists ] ];
     for (NSArray *g in groups) {
-        if (![g[1] count]) continue;
+        if (![[g objectAtIndex:1] count]) continue;
         TNShelf *s = [[TNShelf alloc] init];
-        s.title = g[0];
-        s.items = g[1];
+        s.title = [g objectAtIndex:0];
+        s.items = [g objectAtIndex:1];
         s.songs = TNAllTracks(s.items);
         [out addObject:s];
     }
@@ -710,18 +711,18 @@ static NSArray *TNGroupResults(NSArray *shelves)
 {
     NSMutableDictionary *body = [NSMutableDictionary dictionaryWithObject:query ?: @"" forKey:@"query"];
     NSString *params = TNFilterParams(filter);
-    if (params) body[@"params"] = params;
+    if (params) TNLegacyDictionarySet(body, @"params", params);
     NSDictionary *json = [self callSync:@"search" body:body error:error];
     if (!json) return nil;
-    NSDictionary *list = TNFindKey(TNAt(json, @"contents.tabbedSearchResultsRenderer"), @"sectionListRenderer", 0) ?: TNFindKey(json[@"contents"], @"sectionListRenderer", 0);
-    NSArray *sections = TNArr(list[@"contents"]);
+    NSDictionary *list = TNFindKey(TNAt(json, @"contents.tabbedSearchResultsRenderer"), @"sectionListRenderer", 0) ?: TNFindKey([json objectForKey:@"contents"], @"sectionListRenderer", 0);
+    NSArray *sections = TNArr([list objectForKey:@"contents"]);
     TNSearchResults *results = [[TNSearchResults alloc] init];
     NSArray *shelves = TNShelvesFrom(sections);
     results.shelves = filter == TNSearchAll ? TNGroupResults(shelves) : shelves;
     if (filter != TNSearchAll) {
         for (id s in sections) {
-            NSDictionary *shelf = TNDict(TNDict(s)[@"musicShelfRenderer"]);
-            if (shelf) { results.continuation = TNContinuationIn(TNArr(shelf[@"contents"]), shelf); break; }
+            NSDictionary *shelf = TNDict([TNDict(s) objectForKey:@"musicShelfRenderer"]);
+            if (shelf) { results.continuation = TNContinuationIn(TNArr([shelf objectForKey:@"contents"]), shelf); break; }
         }
     }
     return results;
@@ -750,13 +751,13 @@ static NSArray *TNGroupResults(NSArray *shelves)
         NSDictionary *json = [self callSync:@"search" body:@{ @"continuation": continuation ?: @"" } error:error];
         if (!json) return nil;
         NSDictionary *shelf = TNDict(TNAt(json, @"continuationContents.musicShelfContinuation"));
-        NSArray *contents = TNArr(shelf[@"contents"]);
+        NSArray *contents = TNArr([shelf objectForKey:@"contents"]);
         NSString *next = TNContinuationIn(contents, shelf);
         return @[ TNItemsFrom(contents), next ?: @"" ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        NSString *next = result.count > 1 && [result[1] length] ? result[1] : nil;
-        completion(result.count ? result[0] : nil, next, error);
+        NSString *next = result.count > 1 && [[result objectAtIndex:1] length] ? [result objectAtIndex:1] : nil;
+        completion(result.count ? [result objectAtIndex:0] : nil, next, error);
     }];
 }
 
@@ -766,7 +767,7 @@ static NSArray *TNGroupResults(NSArray *shelves)
         NSDictionary *json = [self callSync:@"music/get_search_suggestions" body:@{ @"input": input ?: @"" } error:error];
         if (!json) return nil;
         NSMutableArray *texts = [NSMutableArray array];
-        for (id section in TNArr(json[@"contents"]) ?: @[]) {
+        for (id section in TNArr([json objectForKey:@"contents"]) ?: @[]) {
             for (id c in TNArr(TNAt(section, @"searchSuggestionsSectionRenderer.contents")) ?: @[]) {
                 NSString *t = TNText(TNAt(c, @"searchSuggestionRenderer.suggestion"));
                 if (t.length && ![texts containsObject:t]) [texts addObject:t];
@@ -788,36 +789,36 @@ static NSArray *TNGroupResults(NSArray *shelves)
         TNAlbum *album = [[TNAlbum alloc] init];
         album.browseId = browseId;
         NSDictionary *header = TNFindKey(json, @"musicResponsiveHeaderRenderer", 0) ?: TNFindKey(json, @"musicDetailHeaderRenderer", 0);
-        album.name = TNText(header[@"title"]);
+        album.name = TNText([header objectForKey:@"title"]);
         album.thumbnails = TNThumbsOf(header);
-        album.info = TNText(header[@"secondSubtitle"]);
-        album.descriptionText = TNText(TNAt(header, @"description.musicDescriptionShelfRenderer.description")) ?: TNText(header[@"description"]);
+        album.info = TNText([header objectForKey:@"secondSubtitle"]);
+        album.descriptionText = TNText(TNAt(header, @"description.musicDescriptionShelfRenderer.description")) ?: TNText([header objectForKey:@"description"]);
         NSMutableArray *artists = [NSMutableArray array];
-        for (id run in TNRunsOf(header[@"straplineTextOne"])) { TNArtist *a = TNArtistFromRun(TNDict(run)); if (a) [artists addObject:a]; }
-        NSArray *subRuns = TNRunsOf(header[@"subtitle"]);
+        for (id run in TNRunsOf([header objectForKey:@"straplineTextOne"])) { TNArtist *a = TNArtistFromRun(TNDict(run)); if (a) [artists addObject:a]; }
+        NSArray *subRuns = TNRunsOf([header objectForKey:@"subtitle"]);
         for (id run in subRuns) { TNArtist *a = TNArtistFromRun(TNDict(run)); if (a) [artists addObject:a]; }
         for (NSString *seg in TNSegments(subRuns)) {
             if (TNIsYear(seg)) album.year = seg;
             else if (TNIsTypeWord(seg) && !album.kind) album.kind = seg;
         }
         if (!artists.count) {
-            NSString *strap = TNText(header[@"straplineTextOne"]);
+            NSString *strap = TNText([header objectForKey:@"straplineTextOne"]);
             if (strap.length) { TNArtist *a = [[TNArtist alloc] init]; a.name = strap; [artists addObject:a]; }
         }
         album.artists = artists;
-        for (id b in TNArr(header[@"buttons"]) ?: @[]) {
+        for (id b in TNArr([header objectForKey:@"buttons"]) ?: @[]) {
             NSString *pl = TNStr(TNAt(b, @"musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.playlistId")) ?:
                            TNStr(TNAt(b, @"buttonRenderer.navigationEndpoint.watchPlaylistEndpoint.playlistId"));
             if ([pl hasPrefix:@"OLAK"]) { album.playlistId = pl; break; }
         }
         // the songs: the first shelf of the second column; the rest ("Other versions"...) are shelves
         NSDictionary *second = TNDict(TNAt(json, @"contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer"));
-        NSArray *sections = TNArr(second[@"contents"]);
-        if (!sections) sections = TNArr(TNFindKey(json[@"contents"], @"sectionListRenderer", 0)[@"contents"]);
+        NSArray *sections = TNArr([second objectForKey:@"contents"]);
+        if (!sections) sections = TNArr([TNFindKey([json objectForKey:@"contents"], @"sectionListRenderer", 0) objectForKey:@"contents"]);
         NSMutableArray *tracks = [NSMutableArray array];
         NSMutableArray *shelves = [NSMutableArray array];
         for (id s in sections ?: @[]) {
-            NSDictionary *songs = TNDict(TNDict(s)[@"musicShelfRenderer"]);
+            NSDictionary *songs = TNDict([TNDict(s) objectForKey:@"musicShelfRenderer"]);
             if (songs && !tracks.count) {
                 TNAlbum *ref = [[TNAlbum alloc] init];   // (the songs carry a light copy: no list in a list)
                 ref.browseId = album.browseId;
@@ -826,7 +827,7 @@ static NSArray *TNGroupResults(NSArray *shelves)
                 ref.thumbnails = album.thumbnails;
                 ref.artists = album.artists;
                 ref.year = album.year;
-                for (id item in TNItemsFrom(TNArr(songs[@"contents"]))) {
+                for (id item in TNItemsFrom(TNArr([songs objectForKey:@"contents"]))) {
                     if (![item isKindOfClass:[TNTrack class]]) continue;
                     TNTrack *t = item;
                     t.album = ref;
@@ -837,7 +838,7 @@ static NSArray *TNGroupResults(NSArray *shelves)
                     [tracks addObject:t];
                 }
                 if (!album.playlistId.length) {
-                    NSString *pl = TNStr(TNAt([TNArr(songs[@"contents"]) firstObject], @"musicResponsiveListItemRenderer.flexColumns.0.musicResponsiveListItemFlexColumnRenderer.text.runs.0.navigationEndpoint.watchEndpoint.playlistId"));
+                    NSString *pl = TNStr(TNAt([TNArr([songs objectForKey:@"contents"]) firstObject], @"musicResponsiveListItemRenderer.flexColumns.0.musicResponsiveListItemFlexColumnRenderer.text.runs.0.navigationEndpoint.watchEndpoint.playlistId"));
                     if (pl.length) { album.playlistId = pl; ref.playlistId = pl; }
                 }
                 continue;
@@ -850,7 +851,7 @@ static NSArray *TNGroupResults(NSArray *shelves)
         return @[ album, shelves ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        completion(result.count ? result[0] : nil, result.count ? result[1] : nil, error);
+        completion(result.count ? [result objectAtIndex:0] : nil, result.count ? [result objectAtIndex:1] : nil, error);
     }];
 }
 
@@ -861,26 +862,26 @@ static NSArray *TNGroupResults(NSArray *shelves)
         if (!json) return nil;
         TNArtistPage *page = [[TNArtistPage alloc] init];
         NSDictionary *header = TNDict(TNAt(json, @"header.musicImmersiveHeaderRenderer")) ?: TNDict(TNAt(json, @"header.musicVisualHeaderRenderer")) ?:
-                               TNFindKey(json[@"header"], @"musicResponsiveHeaderRenderer", 0);
+                               TNFindKey([json objectForKey:@"header"], @"musicResponsiveHeaderRenderer", 0);
         TNArtist *artist = [[TNArtist alloc] init];
         artist.browseId = browseId;
-        artist.name = TNText(header[@"title"]);
+        artist.name = TNText([header objectForKey:@"title"]);
         artist.thumbnails = TNThumbsOf(header);
-        artist.subtitle = TNText(header[@"monthlyListenerCount"]);
+        artist.subtitle = TNText([header objectForKey:@"monthlyListenerCount"]);
         page.artist = artist;
         page.bannerThumbnails = artist.thumbnails;
         page.subscribers = TNText(TNAt(header, @"subscriptionButton.subscribeButtonRenderer.subscriberCountText"));
-        page.descriptionText = TNText(header[@"description"]);
+        page.descriptionText = TNText([header objectForKey:@"description"]);
         page.radioVideoId = TNStr(TNAt(header, @"startRadioButton.buttonRenderer.navigationEndpoint.watchEndpoint.videoId"));
         page.radioPlaylistId = TNStr(TNAt(header, @"startRadioButton.buttonRenderer.navigationEndpoint.watchEndpoint.playlistId"));
-        NSDictionary *list = TNFindKey(json[@"contents"], @"sectionListRenderer", 0);
+        NSDictionary *list = TNFindKey([json objectForKey:@"contents"], @"sectionListRenderer", 0);
         NSMutableArray *shelves = [NSMutableArray array];
-        for (id s in TNArr(list[@"contents"]) ?: @[]) {
-            NSDictionary *songs = TNDict(TNDict(s)[@"musicShelfRenderer"]);
+        for (id s in TNArr([list objectForKey:@"contents"]) ?: @[]) {
+            NSDictionary *songs = TNDict([TNDict(s) objectForKey:@"musicShelfRenderer"]);
             if (songs && !page.topSongs.count) {
-                page.topSongs = TNItemsFrom(TNArr(songs[@"contents"]));
+                page.topSongs = TNItemsFrom(TNArr([songs objectForKey:@"contents"]));
                 page.allSongsBrowseId = TNStr(TNAt(songs, @"bottomEndpoint.browseEndpoint.browseId")) ?:
-                                        TNStr(TNAt([TNRunsOf(songs[@"title"]) firstObject], @"navigationEndpoint.browseEndpoint.browseId"));
+                                        TNStr(TNAt([TNRunsOf([songs objectForKey:@"title"]) firstObject], @"navigationEndpoint.browseEndpoint.browseId"));
                 continue;
             }
             NSString *about = TNText(TNAt(s, @"musicDescriptionShelfRenderer.description"));
@@ -907,21 +908,21 @@ static NSArray *TNGroupResults(NSArray *shelves)
         p.playlistId = [self playlistIdFromBrowseId:bid];
         p.source = TNSourceYouTube;
         NSDictionary *header = TNFindKey(json, @"musicResponsiveHeaderRenderer", 0) ?: TNFindKey(json, @"musicDetailHeaderRenderer", 0);
-        p.name = TNText(header[@"title"]);
+        p.name = TNText([header objectForKey:@"title"]);
         p.thumbnails = TNThumbsOf(header);
-        p.info = TNText(header[@"secondSubtitle"]);
+        p.info = TNText([header objectForKey:@"secondSubtitle"]);
         p.trackCount = TNCountIn(p.info);
-        p.descriptionText = TNText(TNAt(header, @"description.musicDescriptionShelfRenderer.description")) ?: TNText(header[@"description"]);
-        p.author = TNText(header[@"straplineTextOne"]) ?: TNStr(TNAt(header, @"facepile.avatarStackViewModel.text.content"));
+        p.descriptionText = TNText(TNAt(header, @"description.musicDescriptionShelfRenderer.description")) ?: TNText([header objectForKey:@"description"]);
+        p.author = TNText([header objectForKey:@"straplineTextOne"]) ?: TNStr(TNAt(header, @"facepile.avatarStackViewModel.text.content"));
         if (!p.author.length) {
-            for (NSString *seg in TNSegments(TNRunsOf(header[@"subtitle"]))) {
+            for (NSString *seg in TNSegments(TNRunsOf([header objectForKey:@"subtitle"]))) {
                 if (TNIsTypeWord(seg) || TNIsYear(seg)) continue;
                 p.author = seg;
                 break;
             }
         }
-        NSDictionary *shelf = TNFindKey(json[@"contents"], @"musicPlaylistShelfRenderer", 0) ?: TNFindKey(json[@"contents"], @"musicShelfRenderer", 0);
-        NSArray *contents = TNArr(shelf[@"contents"]);
+        NSDictionary *shelf = TNFindKey([json objectForKey:@"contents"], @"musicPlaylistShelfRenderer", 0) ?: TNFindKey([json objectForKey:@"contents"], @"musicShelfRenderer", 0);
+        NSArray *contents = TNArr([shelf objectForKey:@"contents"]);
         NSArray *tracks = TNItemsFrom(contents);
         NSString *next = TNContinuationIn(contents, shelf);
         if (!next) {
@@ -932,8 +933,8 @@ static NSArray *TNGroupResults(NSArray *shelves)
         return @[ p, tracks, next ?: @"" ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        NSString *next = result.count > 2 && [result[2] length] ? result[2] : nil;
-        completion(result.count ? result[0] : nil, result.count > 1 ? result[1] : nil, next, error);
+        NSString *next = result.count > 2 && [[result objectAtIndex:2] length] ? [result objectAtIndex:2] : nil;
+        completion(result.count ? [result objectAtIndex:0] : nil, result.count > 1 ? [result objectAtIndex:1] : nil, next, error);
     }];
 }
 
@@ -944,13 +945,13 @@ static NSArray *TNGroupResults(NSArray *shelves)
         if (!json) return nil;
         NSArray *contents = TNArr(TNAt(json, @"onResponseReceivedActions.0.appendContinuationItemsAction.continuationItems"));
         NSDictionary *older = TNDict(TNAt(json, @"continuationContents.musicPlaylistShelfContinuation"));
-        if (!contents) contents = TNArr(older[@"contents"]);
+        if (!contents) contents = TNArr([older objectForKey:@"contents"]);
         NSString *next = TNContinuationIn(contents, older);
         return @[ TNItemsFrom(contents), next ?: @"" ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        NSString *next = result.count > 1 && [result[1] length] ? result[1] : nil;
-        completion(result.count ? result[0] : nil, next, error);
+        NSString *next = result.count > 1 && [[result objectAtIndex:1] length] ? [result objectAtIndex:1] : nil;
+        completion(result.count ? [result objectAtIndex:0] : nil, next, error);
     }];
 }
 
@@ -961,15 +962,15 @@ static NSArray *TNGroupResults(NSArray *shelves)
     TNWatchQueue *q = [[TNWatchQueue alloc] init];
     NSArray *tabs = TNArr(TNAt(json, @"contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs"));
     NSDictionary *panel = TNDict(TNAt(tabs.firstObject, @"tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer"));
-    NSArray *contents = TNArr(panel[@"contents"]);
+    NSArray *contents = TNArr([panel objectForKey:@"contents"]);
     q.tracks = TNItemsFrom(contents);
     q.continuation = TNContinuationIn(contents, panel);
-    q.playlistId = TNStr(panel[@"playlistId"]);
+    q.playlistId = TNStr([panel objectForKey:@"playlistId"]);
     for (id tab in tabs) {
         NSDictionary *browse = TNDict(TNAt(tab, @"tabRenderer.endpoint.browseEndpoint"));
         NSString *type = TNPageType(browse);
-        if ([type isEqualToString:@"MUSIC_PAGE_TYPE_TRACK_LYRICS"]) q.lyricsBrowseId = TNStr(browse[@"browseId"]);
-        if ([type isEqualToString:@"MUSIC_PAGE_TYPE_TRACK_RELATED"]) q.relatedBrowseId = TNStr(browse[@"browseId"]);
+        if ([type isEqualToString:@"MUSIC_PAGE_TYPE_TRACK_LYRICS"]) q.lyricsBrowseId = TNStr([browse objectForKey:@"browseId"]);
+        if ([type isEqualToString:@"MUSIC_PAGE_TYPE_TRACK_RELATED"]) q.relatedBrowseId = TNStr([browse objectForKey:@"browseId"]);
     }
     return q;
 }
@@ -978,15 +979,15 @@ static NSArray *TNGroupResults(NSArray *shelves)
 {
     return [self run:^id(NSError **error) {
         NSMutableDictionary *body = [NSMutableDictionary dictionary];
-        if (videoId.length) body[@"videoId"] = videoId;
-        body[@"playlistId"] = playlistId.length ? playlistId : [@"RDAMVM" stringByAppendingString:videoId ?: @""];
-        body[@"isAudioOnly"] = @YES;
-        body[@"enablePersistentPlaylistPanel"] = @YES;
-        body[@"tunerSettingValue"] = @"AUTOMIX_SETTING_NORMAL";
+        if (videoId.length) TNLegacyDictionarySet(body, @"videoId", videoId);
+        TNLegacyDictionarySet(body, @"playlistId", playlistId.length ? playlistId : [@"RDAMVM" stringByAppendingString:videoId ?: @""]);
+        TNLegacyDictionarySet(body, @"isAudioOnly", @YES);
+        TNLegacyDictionarySet(body, @"enablePersistentPlaylistPanel", @YES);
+        TNLegacyDictionarySet(body, @"tunerSettingValue", @"AUTOMIX_SETTING_NORMAL");
         NSDictionary *json = [self callSync:@"next" body:body error:error];
         if (!json) return nil;
         TNWatchQueue *q = [self watchQueueFrom:json];
-        if (!q.playlistId.length) q.playlistId = body[@"playlistId"];
+        if (!q.playlistId.length) q.playlistId = [body objectForKey:@"playlistId"];
         TNLog(@"radio %@: %lu songs, lyrics %@", videoId ?: playlistId, (unsigned long)q.tracks.count, q.lyricsBrowseId.length ? @"yes" : @"no");
         return q;
     } completion:^(id result, NSError *error) {
@@ -999,18 +1000,18 @@ static NSArray *TNGroupResults(NSArray *shelves)
     NSString *token = queue.continuation, *playlistId = queue.playlistId;
     return [self run:^id(NSError **error) {
         NSMutableDictionary *body = [NSMutableDictionary dictionaryWithObject:token ?: @"" forKey:@"continuation"];
-        if (playlistId.length) body[@"playlistId"] = playlistId;
-        body[@"isAudioOnly"] = @YES;
-        body[@"enablePersistentPlaylistPanel"] = @YES;
+        if (playlistId.length) TNLegacyDictionarySet(body, @"playlistId", playlistId);
+        TNLegacyDictionarySet(body, @"isAudioOnly", @YES);
+        TNLegacyDictionarySet(body, @"enablePersistentPlaylistPanel", @YES);
         NSDictionary *json = [self callSync:@"next" body:body error:error];
         if (!json) return nil;
         NSDictionary *panel = TNDict(TNAt(json, @"continuationContents.playlistPanelContinuation"));
-        NSArray *contents = TNArr(panel[@"contents"]);
+        NSArray *contents = TNArr([panel objectForKey:@"contents"]);
         return @[ TNItemsFrom(contents), TNContinuationIn(contents, panel) ?: @"" ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        NSString *next = result.count > 1 && [result[1] length] ? result[1] : nil;
-        completion(result.count ? result[0] : nil, next, error);
+        NSString *next = result.count > 1 && [[result objectAtIndex:1] length] ? [result objectAtIndex:1] : nil;
+        completion(result.count ? [result objectAtIndex:0] : nil, next, error);
     }];
 }
 
@@ -1023,11 +1024,11 @@ static NSArray *TNGroupResults(NSArray *shelves)
         if (!lyricsId.length) return @[ @"", @"" ];
         NSDictionary *json = [self callSync:@"browse" body:@{ @"browseId": lyricsId } error:error];
         if (!json) return nil;
-        NSDictionary *shelf = TNFindKey(json[@"contents"], @"musicDescriptionShelfRenderer", 0);
-        return @[ TNText(shelf[@"description"]) ?: @"", TNText(shelf[@"footer"]) ?: @"" ];
+        NSDictionary *shelf = TNFindKey([json objectForKey:@"contents"], @"musicDescriptionShelfRenderer", 0);
+        return @[ TNText([shelf objectForKey:@"description"]) ?: @"", TNText([shelf objectForKey:@"footer"]) ?: @"" ];
     } completion:^(id resultObject, NSError *error) {
         NSArray *result = TNArr(resultObject);
-        completion(result.count ? result[0] : nil, result.count > 1 ? result[1] : nil, error);
+        completion(result.count ? [result objectAtIndex:0] : nil, result.count > 1 ? [result objectAtIndex:1] : nil, error);
     }];
 }
 

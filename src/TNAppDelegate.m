@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNAppDelegate.h"
 #import "TNRootViewController.h"
 #import "TNExternalOpen.h"
@@ -139,12 +140,12 @@ static BOOL TNPressView(UIView *v, NSString *text)
     NSRange q = [target rangeOfString:@"?"];
     if (q.location != NSNotFound) { query = [target substringFromIndex:q.location + 1]; target = [target substringToIndex:q.location]; }
     NSDictionary *params = query.length ? [TNUtils parseQuery:query] : @{};
-    if ([target isEqualToString:@"open"] && [params[@"url"] length]) { [TNRouter openURL:params[@"url"]]; return YES; }
-    if ([target isEqualToString:@"import"] && [params[@"url"] length]) { [TNRouter importLink:params[@"url"]]; return YES; }
+    if ([target isEqualToString:@"open"] && [[params objectForKey:@"url"] length]) { [TNRouter openURL:[params objectForKey:@"url"]]; return YES; }
+    if ([target isEqualToString:@"import"] && [[params objectForKey:@"url"] length]) { [TNRouter importLink:[params objectForKey:@"url"]]; return YES; }
     if ([target isEqualToString:@"search"]) {
         [root showSection:TNSectionSearch];
         UIViewController *search = root.contentNavigationController.viewControllers.firstObject;
-        if ([params[@"q"] length] && [search isKindOfClass:[TNSearchViewController class]]) [(TNSearchViewController *)search searchFor:params[@"q"]];
+        if ([[params objectForKey:@"q"] length] && [search isKindOfClass:[TNSearchViewController class]]) [(TNSearchViewController *)search searchFor:[params objectForKey:@"q"]];
         return YES;
     }
 
@@ -162,8 +163,8 @@ static BOOL TNPressView(UIView *v, NSString *text)
         return YES;
     }
     // link?url=<percent-encoded url>: what a tapped web link does (the browser chooser on iOS 6), for the tests
-    if ([target isEqualToString:@"link"] && [params[@"url"] length]) {
-        NSString *link = params[@"url"];
+    if ([target isEqualToString:@"link"] && [[params objectForKey:@"url"] length]) {
+        NSString *link = [params objectForKey:@"url"];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [TNExternalOpen presentOpenInForURL:[NSURL URLWithString:link] from:[[TNRootViewController shared] topController] anchor:nil];
         });
@@ -175,12 +176,12 @@ static BOOL TNPressView(UIView *v, NSString *text)
     }
     // ytm?ep=browse&id=<browseId>[&params=] or ep=search&q=: one InnerTube call, the answer saved to tmp/ytm.json
     if ([target isEqualToString:@"ytm"]) {
-        NSString *ep = params[@"ep"] ?: @"browse";
+        NSString *ep = [params objectForKey:@"ep"] ?: @"browse";
         NSMutableDictionary *body = [NSMutableDictionary dictionary];
-        if (params[@"id"]) body[@"browseId"] = params[@"id"];
-        if (params[@"params"]) body[@"params"] = params[@"params"];
-        if (params[@"q"]) body[@"query"] = params[@"q"];
-        if (params[@"v"]) body[@"videoId"] = params[@"v"];
+        if ([params objectForKey:@"id"]) TNLegacyDictionarySet(body, @"browseId", [params objectForKey:@"id"]);
+        if ([params objectForKey:@"params"]) TNLegacyDictionarySet(body, @"params", [params objectForKey:@"params"]);
+        if ([params objectForKey:@"q"]) TNLegacyDictionarySet(body, @"query", [params objectForKey:@"q"]);
+        if ([params objectForKey:@"v"]) TNLegacyDictionarySet(body, @"videoId", [params objectForKey:@"v"]);
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSError *e = nil;
             NSDictionary *json = [TNYTMusic callSync:ep body:body error:&e];
@@ -194,7 +195,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
     // lang?set=en|cs|system: the app's own language, for checking both (the device's stays); it applies from the next
     // launch, so the app quits
     if ([target isEqualToString:@"lang"]) {
-        NSString *set = params[@"set"] ?: @"system";
+        NSString *set = [params objectForKey:@"set"] ?: @"system";
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
         if ([set isEqualToString:@"system"]) [d removeObjectForKey:@"AppleLanguages"];
         else [d setObject:@[ set ] forKey:@"AppleLanguages"];
@@ -221,19 +222,19 @@ static BOOL TNPressView(UIView *v, NSString *text)
         return YES;
     }
     if ([target isEqualToString:@"sheet"]) {
-        TNLog(@"Sheet %@: %@", params[@"title"], [TNActionSheet pressButtonTitled:params[@"title"] ?: @""] ? @"done" : @"nothing found");
+        TNLog(@"Sheet %@: %@", [params objectForKey:@"title"], [TNActionSheet pressButtonTitled:[params objectForKey:@"title"] ?: @""] ? @"done" : @"nothing found");
         return YES;
     }
     if ([target isEqualToString:@"more"]) {
         // the "…" of the song playing, or of the list on screen (the menu then works with sheet?title=)
         UIViewController *t = [root topController];
-        if ([params[@"list"] length] && [t isKindOfClass:[TNTrackListViewController class]]) [(TNTrackListViewController *)t listActions];
+        if ([[params objectForKey:@"list"] length] && [t isKindOfClass:[TNTrackListViewController class]]) [(TNTrackListViewController *)t listActions];
         else if ([TNPlayer shared].currentTrack) [TNRouter showActionsForTrack:[TNPlayer shared].currentTrack fromView:t.view inController:t];
         return YES;
     }
     if ([target isEqualToString:@"press"]) {
-        NSString *byTitle = params[@"title"];
-        NSInteger n = [params[@"n"] integerValue];
+        NSString *byTitle = [params objectForKey:@"title"];
+        NSInteger n = [[params objectForKey:@"n"] integerValue];
         // the screen on top first: a covered screen underneath can have a button with the same label
         NSMutableArray *views = [NSMutableArray array];
         UIView *topView = top.navigationController.view ?: top.view;
@@ -241,7 +242,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
         for (UIWindow *w in [UIApplication sharedApplication].windows) [views addObject:w];
         BOOL pressed = NO;
         for (NSUInteger i = 0; i < views.count && !pressed; i++) {
-            UIView *v = views[i];
+            UIView *v = [views objectAtIndex:i];
             if (!byTitle.length && [v isKindOfClass:[UIActionSheet class]] && ((UIActionSheet *)v).visible) {
                 UIActionSheet *sheet = (UIActionSheet *)v;
                 if ([sheet.delegate respondsToSelector:@selector(actionSheet:clickedButtonAtIndex:)]) [sheet.delegate actionSheet:sheet clickedButtonAtIndex:n];
@@ -266,42 +267,42 @@ static BOOL TNPressView(UIView *v, NSString *text)
         NSDictionary *names = @{ @"home": @(TNSectionHome), @"explore": @(TNSectionExplore), @"search": @(TNSectionSearch), @"liked": @(TNSectionLiked),
                                  @"playlists": @(TNSectionPlaylists), @"albums": @(TNSectionAlbums), @"artists": @(TNSectionArtists),
                                  @"recent": @(TNSectionRecent), @"apple": @(TNSectionApple), @"settings": @(TNSectionSettings), @"library": @(TNSectionLibrary) };
-        NSNumber *section = names[[params[@"name"] lowercaseString] ?: @""];
+        NSNumber *section = [names objectForKey:[[params objectForKey:@"name"] lowercaseString] ?: @""];
         if (section) [root showSection:(TNSection)[section integerValue]];
-        TNLog(@"Section %@: %@", params[@"name"], section ? @"shown" : @"unknown");
+        TNLog(@"Section %@: %@", [params objectForKey:@"name"], section ? @"shown" : @"unknown");
         return YES;
     }
 
     // audiotest?url=<percent-encoded audio address>&ms=<length>: the file straight to the engine (the decoder on its own)
-    if ([target isEqualToString:@"audiotest"] && [params[@"url"] length]) {
-        [[TNPlayer shared] debugPlayURL:params[@"url"] durationMs:[params[@"ms"] integerValue]];
+    if ([target isEqualToString:@"audiotest"] && [[params objectForKey:@"url"] length]) {
+        [[TNPlayer shared] debugPlayURL:[params objectForKey:@"url"] durationMs:[[params objectForKey:@"ms"] integerValue]];
         return YES;
     }
-    if ([target isEqualToString:@"play"] && [params[@"v"] length]) {
-        [TNRouter openURL:[@"https://music.youtube.com/watch?v=" stringByAppendingString:params[@"v"]]];
+    if ([target isEqualToString:@"play"] && [[params objectForKey:@"v"] length]) {
+        [TNRouter openURL:[@"https://music.youtube.com/watch?v=" stringByAppendingString:[params objectForKey:@"v"]]];
         return YES;
     }
     if ([target isEqualToString:@"player"]) {
         TNPlayer *p = [TNPlayer shared];
-        NSString *cmd = params[@"cmd"];
+        NSString *cmd = [params objectForKey:@"cmd"];
         if ([cmd isEqualToString:@"pause"]) [p pause];
         else if ([cmd isEqualToString:@"play"]) [p play];
         else if ([cmd isEqualToString:@"next"]) [p next];
         else if ([cmd isEqualToString:@"prev"]) [p previous];
-        else if ([cmd isEqualToString:@"seek"]) [p seekToMs:[params[@"ms"] integerValue]];
+        else if ([cmd isEqualToString:@"seek"]) [p seekToMs:[[params objectForKey:@"ms"] integerValue]];
         else if ([cmd isEqualToString:@"shuffle"]) p.shuffle = !p.shuffle;
         else if ([cmd isEqualToString:@"repeat"]) p.repeat = (TNRepeatMode)((p.repeat + 1) % 3);
         TNLog(@"Player %@: %@", cmd, [p debugState]);
         return YES;
     }
     if ([target isEqualToString:@"nowplaying"]) {
-        NSString *panel = params[@"panel"];
+        NSString *panel = [params objectForKey:@"panel"];
         [root presentNowPlayingPanel:[panel isEqualToString:@"lyrics"] ? TNNowPlayingLyrics : [panel isEqualToString:@"queue"] ? TNNowPlayingQueue : TNNowPlayingArt];
         return YES;
     }
     if ([target isEqualToString:@"rotate"]) {
         // (debug only, for testing without turning the iPad: a private UIDevice method turns the interface)
-        NSInteger o = [params[@"o"] isEqualToString:@"landscape"] ? UIInterfaceOrientationLandscapeLeft : UIInterfaceOrientationPortrait;
+        NSInteger o = [[params objectForKey:@"o"] isEqualToString:@"landscape"] ? UIInterfaceOrientationLandscapeLeft : UIInterfaceOrientationPortrait;
         SEL sel = NSSelectorFromString(@"setOrientation:");
         if ([[UIDevice currentDevice] respondsToSelector:sel]) {
             NSInvocation *inv = [NSInvocation invocationWithMethodSignature:[UIDevice instanceMethodSignatureForSelector:sel]];
@@ -310,7 +311,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
             [inv setArgument:&o atIndex:2];
             [inv invoke];
         }
-        TNLog(@"Rotate to %@: interface now %ld", params[@"o"], (long)[UIApplication sharedApplication].statusBarOrientation);
+        TNLog(@"Rotate to %@: interface now %ld", [params objectForKey:@"o"], (long)[UIApplication sharedApplication].statusBarOrientation);
         return YES;
     }
     return YES;

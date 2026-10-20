@@ -142,7 +142,7 @@ static const NSUInteger TNMaxRecentSearches = 12;
     if (!q.length) return;
     NSMutableArray *list = [[self recentSearches] mutableCopy];
     for (NSInteger i = (NSInteger)list.count - 1; i >= 0; i--) {
-        if ([TNStr(list[(NSUInteger)i]) caseInsensitiveCompare:q] == NSOrderedSame) [list removeObjectAtIndex:(NSUInteger)i];
+        if ([TNStr([list objectAtIndex:(NSUInteger)i]) caseInsensitiveCompare:q] == NSOrderedSame) [list removeObjectAtIndex:(NSUInteger)i];
     }
     [list insertObject:q atIndex:0];
     while (list.count > TNMaxRecentSearches) [list removeLastObject];

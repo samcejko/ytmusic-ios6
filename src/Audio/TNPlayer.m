@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNPlayer.h"
 #import "TNPlaybackEngine.h"
 #import "TNModels.h"
@@ -133,27 +134,27 @@ static void TNShuffleArray(NSMutableArray *a)
     self.contextName = name;
     NSInteger start = (NSInteger)MIN(index, tracks.count - 1);
     // (a song that cannot play is passed over)
-    if (![tracks[(NSUInteger)start] playable]) positionMs = 0;
-    while (start < (NSInteger)tracks.count && ![tracks[(NSUInteger)start] playable]) start++;
+    if (![[tracks objectAtIndex:(NSUInteger)start] playable]) positionMs = 0;
+    while (start < (NSInteger)tracks.count && ![[tracks objectAtIndex:(NSUInteger)start] playable]) start++;
     if (start >= (NSInteger)tracks.count) return;
     [self buildOrderStartingWith:start];
     _currentFromQueue = NO;
     _failures = 0;
-    [self loadAndPlay:tracks[(NSUInteger)start] fromMs:positionMs paused:paused];
+    [self loadAndPlay:[tracks objectAtIndex:(NSUInteger)start] fromMs:positionMs paused:paused];
 }
 
 - (NSArray *)contextTracks { return _contextTracks ?: @[]; }
 
 - (NSInteger)contextIndex
 {
-    return (_orderPos >= 0 && _orderPos < (NSInteger)_order.count && !_currentFromQueue) ? [_order[(NSUInteger)_orderPos] integerValue] : -1;
+    return (_orderPos >= 0 && _orderPos < (NSInteger)_order.count && !_currentFromQueue) ? [[_order objectAtIndex:(NSUInteger)_orderPos] integerValue] : -1;
 }
 
 - (NSArray *)previousTracks:(NSUInteger)max
 {
     NSMutableArray *out = [NSMutableArray array];
     for (NSInteger p = MAX(0, _orderPos - (NSInteger)max); p < _orderPos && p < (NSInteger)_order.count; p++) {
-        [out addObject:_contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]]];
+        [out addObject:[_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]]];
     }
     return out;
 }
@@ -178,7 +179,7 @@ static void TNShuffleArray(NSMutableArray *a)
     if (_shuffle == shuffle) return;
     _shuffle = shuffle;
     // the order changes, the current song stays where it is
-    NSInteger current = (_orderPos >= 0 && _orderPos < (NSInteger)_order.count) ? [_order[(NSUInteger)_orderPos] integerValue] : -1;
+    NSInteger current = (_orderPos >= 0 && _orderPos < (NSInteger)_order.count) ? [[_order objectAtIndex:(NSUInteger)_orderPos] integerValue] : -1;
     [self buildOrderStartingWith:current];
     [self dropPrepared];
     [self changed];
@@ -225,7 +226,7 @@ static void TNShuffleArray(NSMutableArray *a)
 {
     NSMutableArray *out = [NSMutableArray array];
     for (NSInteger p = _orderPos + 1; p < (NSInteger)_order.count && out.count < max; p++) {
-        [out addObject:_contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]]];
+        [out addObject:[_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]]];
     }
     return out;
 }
@@ -233,16 +234,16 @@ static void TNShuffleArray(NSMutableArray *a)
 // What comes after the current song, without moving there: (track, from queue?, order position)
 - (TNTrack *)peekNext:(BOOL *)fromQueue position:(NSInteger *)position
 {
-    if (self.queue.count) { *fromQueue = YES; *position = _orderPos; return self.queue[0]; }
+    if (self.queue.count) { *fromQueue = YES; *position = _orderPos; return [self.queue objectAtIndex:0]; }
     *fromQueue = NO;
     if (self.repeat == TNRepeatOne && self.currentTrack) { *position = _orderPos; return self.currentTrack; }
     for (NSInteger p = _orderPos + 1; p < (NSInteger)_order.count; p++) {
-        TNTrack *t = _contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]];
+        TNTrack *t = [_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]];
         if (t.playable) { *position = p; return t; }
     }
     if (self.repeat == TNRepeatAll && _order.count) {
         for (NSInteger p = 0; p < (NSInteger)_order.count; p++) {
-            TNTrack *t = _contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]];
+            TNTrack *t = [_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]];
             if (t.playable) { *position = p; return t; }
         }
     }
@@ -446,7 +447,7 @@ static void TNShuffleArray(NSMutableArray *a)
 // The queue position follows a song that started by itself (gapless)
 - (void)moveToTrack:(TNTrack *)track
 {
-    if (self.queue.count && self.queue[0] == track) {
+    if (self.queue.count && [self.queue objectAtIndex:0] == track) {
         [self.queue removeObjectAtIndex:0];
         _currentFromQueue = YES;
         return;
@@ -454,10 +455,10 @@ static void TNShuffleArray(NSMutableArray *a)
     _currentFromQueue = NO;
     if (self.repeat == TNRepeatOne) return;
     for (NSInteger p = _orderPos + 1; p < (NSInteger)_order.count; p++) {
-        if (_contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]] == track) { _orderPos = p; return; }
+        if ([_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]] == track) { _orderPos = p; return; }
     }
     for (NSInteger p = 0; p < (NSInteger)_order.count; p++) {
-        if (_contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]] == track) { _orderPos = p; return; }
+        if ([_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]] == track) { _orderPos = p; return; }
     }
 }
 
@@ -468,14 +469,14 @@ static void TNShuffleArray(NSMutableArray *a)
         return;
     }
     if (self.queue.count) {
-        TNTrack *t = self.queue[0];
+        TNTrack *t = [self.queue objectAtIndex:0];
         [self.queue removeObjectAtIndex:0];
         _currentFromQueue = YES;
         [self loadAndPlay:t];
         return;
     }
     for (NSInteger p = _orderPos + 1; p < (NSInteger)_order.count; p++) {
-        TNTrack *t = _contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]];
+        TNTrack *t = [_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]];
         if (!t.playable) continue;
         _orderPos = p;
         _currentFromQueue = NO;
@@ -556,7 +557,7 @@ static void TNShuffleArray(NSMutableArray *a)
         return;
     }
     for (NSInteger p = _orderPos - 1; p >= 0; p--) {
-        TNTrack *t = _contextTracks[[_order[(NSUInteger)p] unsignedIntegerValue]];
+        TNTrack *t = [_contextTracks objectAtIndex:[[_order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]];
         if (!t.playable) continue;
         _orderPos = p;
         self.playing = YES;
@@ -608,13 +609,13 @@ static void TNShuffleArray(NSMutableArray *a)
         }];
     }
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
-    info[MPMediaItemPropertyTitle] = t.name ?: @"";
-    info[MPMediaItemPropertyArtist] = [t artistNames] ?: @"";
-    if (t.album.name.length) info[MPMediaItemPropertyAlbumTitle] = t.album.name;
-    info[MPMediaItemPropertyPlaybackDuration] = @((double)self.durationMs / 1000.0);
-    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @((double)self.positionMs / 1000.0);
-    info[MPNowPlayingInfoPropertyPlaybackRate] = @(self.playing && !self.buffering ? 1.0 : 0.0);
-    if (_artwork) info[MPMediaItemPropertyArtwork] = [[MPMediaItemArtwork alloc] initWithImage:_artwork];
+    TNLegacyDictionarySet(info, MPMediaItemPropertyTitle, t.name ?: @"");
+    TNLegacyDictionarySet(info, MPMediaItemPropertyArtist, [t artistNames] ?: @"");
+    if (t.album.name.length) TNLegacyDictionarySet(info, MPMediaItemPropertyAlbumTitle, t.album.name);
+    TNLegacyDictionarySet(info, MPMediaItemPropertyPlaybackDuration, @((double)self.durationMs / 1000.0));
+    TNLegacyDictionarySet(info, MPNowPlayingInfoPropertyElapsedPlaybackTime, @((double)self.positionMs / 1000.0));
+    TNLegacyDictionarySet(info, MPNowPlayingInfoPropertyPlaybackRate, @(self.playing && !self.buffering ? 1.0 : 0.0));
+    if (_artwork) TNLegacyDictionarySet(info, MPMediaItemPropertyArtwork, [[MPMediaItemArtwork alloc] initWithImage:_artwork]);
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = info;
 }
 
@@ -656,7 +657,7 @@ static void TNShuffleArray(NSMutableArray *a)
 - (void)moveQueueItemFrom:(NSUInteger)from to:(NSUInteger)to
 {
     if (from >= self.queue.count || to >= self.queue.count || from == to) return;
-    id t = self.queue[from];
+    id t = [self.queue objectAtIndex:from];
     [self.queue removeObjectAtIndex:from];
     [self.queue insertObject:t atIndex:to];
     [self dropPrepared];
@@ -667,7 +668,7 @@ static void TNShuffleArray(NSMutableArray *a)
 {
     NSInteger a = _orderPos + 1 + (NSInteger)from, b = _orderPos + 1 + (NSInteger)to;
     if (a < 0 || b < 0 || a >= (NSInteger)_order.count || b >= (NSInteger)_order.count || a == b) return;
-    id x = _order[(NSUInteger)a];
+    id x = [_order objectAtIndex:(NSUInteger)a];
     [_order removeObjectAtIndex:(NSUInteger)a];
     [_order insertObject:x atIndex:(NSUInteger)b];
     [self dropPrepared];
@@ -735,7 +736,7 @@ static NSArray *TNJSONTracks(NSArray *tracks)
     if (context.count > 1500) {
         // (a huge context: the song and what follows in play order are enough)
         NSMutableArray *window = [NSMutableArray array];
-        for (NSInteger p = MAX(0, pos); p < (NSInteger)order.count && window.count < 500; p++) [window addObject:context[[order[(NSUInteger)p] unsignedIntegerValue]]];
+        for (NSInteger p = MAX(0, pos); p < (NSInteger)order.count && window.count < 500; p++) [window addObject:[context objectAtIndex:[[order objectAtIndex:(NSUInteger)p] unsignedIntegerValue]]];
         context = window;
         NSMutableArray *o = [NSMutableArray array];
         for (NSUInteger i = 0; i < window.count; i++) [o addObject:@(i)];
@@ -755,30 +756,30 @@ static NSArray *TNJSONTracks(NSArray *tracks)
 - (void)restoreState
 {
     NSDictionary *s = TNDict([TNUtils JSONObjectFromData:[NSData dataWithContentsOfFile:[TNPlayer statePath]]]);
-    TNTrack *current = [TNTrack fromJSON:TNDict(s[@"current"])];
+    TNTrack *current = [TNTrack fromJSON:TNDict([s objectForKey:@"current"])];
     if (!current) return;
     NSMutableArray *context = [NSMutableArray array];
-    for (id j in TNArr(s[@"context"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [context addObject:t]; }
+    for (id j in TNArr([s objectForKey:@"context"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [context addObject:t]; }
     NSMutableArray *order = [NSMutableArray array];
-    for (id n in TNArr(s[@"order"]) ?: @[]) if ([n integerValue] >= 0 && [n unsignedIntegerValue] < context.count) [order addObject:@([n unsignedIntegerValue])];
+    for (id n in TNArr([s objectForKey:@"order"]) ?: @[]) if ([n integerValue] >= 0 && [n unsignedIntegerValue] < context.count) [order addObject:@([n unsignedIntegerValue])];
     if (order.count != context.count) { [order removeAllObjects]; for (NSUInteger i = 0; i < context.count; i++) [order addObject:@(i)]; }
     _contextTracks = context;
     _order = order;
-    _orderPos = MIN((NSInteger)order.count - 1, TNInt(s[@"pos"]));
+    _orderPos = MIN((NSInteger)order.count - 1, TNInt([s objectForKey:@"pos"]));
     // (the current song is the same object as its place in the context, so the list shows it as playing)
-    if (_orderPos >= 0 && !TNBool(s[@"fromQueue"])) {
-        TNTrack *atPos = context[[order[(NSUInteger)_orderPos] unsignedIntegerValue]];
+    if (_orderPos >= 0 && !TNBool([s objectForKey:@"fromQueue"])) {
+        TNTrack *atPos = [context objectAtIndex:[[order objectAtIndex:(NSUInteger)_orderPos] unsignedIntegerValue]];
         if ([[atPos key] isEqualToString:[current key]]) current = atPos;
     }
-    for (id j in TNArr(s[@"queue"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [self.queue addObject:t]; }
-    _currentFromQueue = TNBool(s[@"fromQueue"]);
-    _shuffle = TNBool(s[@"shuffle"]);
-    _repeat = (TNRepeatMode)TNInt(s[@"repeat"]);
-    self.contextURI = TNStr(s[@"uri"]);
-    self.contextName = TNStr(s[@"name"]);
+    for (id j in TNArr([s objectForKey:@"queue"]) ?: @[]) { TNTrack *t = [TNTrack fromJSON:TNDict(j)]; if (t) [self.queue addObject:t]; }
+    _currentFromQueue = TNBool([s objectForKey:@"fromQueue"]);
+    _shuffle = TNBool([s objectForKey:@"shuffle"]);
+    _repeat = (TNRepeatMode)TNInt([s objectForKey:@"repeat"]);
+    self.contextURI = TNStr([s objectForKey:@"uri"]);
+    self.contextName = TNStr([s objectForKey:@"name"]);
     self.currentTrack = current;
     self.currentVideoId = current.videoId;
-    _resumeMs = TNInt(s[@"ms"]);
+    _resumeMs = TNInt([s objectForKey:@"ms"]);
     self.playing = NO;
     TNLog(@"restored %@ at %.0f s, %lu songs around it", current.name, _resumeMs / 1000.0, (unsigned long)context.count);
     [[NSNotificationCenter defaultCenter] postNotificationName:TNPlayerDidChangeNotification object:self];

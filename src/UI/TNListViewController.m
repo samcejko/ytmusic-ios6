@@ -40,7 +40,7 @@
     self.messageLabel.textColor = [theme secondaryTextColor];
     self.messageLabel.font = [theme bodyFont];
     self.messageLabel.numberOfLines = 0;
-    self.messageLabel.textAlignment = NSTextAlignmentCenter;
+    self.messageLabel.textAlignment = UITextAlignmentCenter;
     self.messageLabel.hidden = YES;
     [self.view addSubview:self.messageLabel];
     self.retryButton = [theme outlineButtonWithTitle:L(@"Try again")];

@@ -241,7 +241,7 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
             if (row == 3) { cell.textLabel.text = L(@"Likes go to Apple Music"); cell.accessoryView = [self switchOn:[TNSettings syncAppleLikes] action:@selector(appleLikesChanged:)]; }
             if (row == 4) {
                 cell.textLabel.text = L(@"Disconnect");
-                cell.textLabel.textAlignment = NSTextAlignmentCenter;
+                cell.textLabel.textAlignment = UITextAlignmentCenter;
                 cell.textLabel.textColor = [UIColor colorWithRed:1 green:0.42 blue:0.38 alpha:1];
                 cell.selectionStyle = UITableViewCellSelectionStyleGray;
             }
@@ -273,7 +273,7 @@ enum { TNPlayAutoplay, TNPlayNormalize, TNPlayCrossfade, TNPlayVideos, TNPlayMat
             }
             if (row == 3) {
                 cell.textLabel.text = L(@"Remove all downloads");
-                cell.textLabel.textAlignment = NSTextAlignmentCenter;
+                cell.textLabel.textAlignment = UITextAlignmentCenter;
                 cell.textLabel.textColor = [UIColor colorWithRed:1 green:0.42 blue:0.38 alpha:1];
                 cell.selectionStyle = UITableViewCellSelectionStyleGray;
             }

@@ -25,10 +25,10 @@ static const NSUInteger TNChunkFrames = 4096;
     // a downloaded song plays from the disk, whatever the network does
     NSDictionary *local = [[TNDownloads shared] localFileFor:track];
     if (local) {
-        TNPlaybackItem *item = [self itemForTrack:track file:[[TNAudioFile alloc] initWithLocalPath:local[@"path"]]
-                                       durationMs:TNInt(local[@"ms"]) loudness:TNDbl(local[@"loud"]) error:NULL];
+        TNPlaybackItem *item = [self itemForTrack:track file:[[TNAudioFile alloc] initWithLocalPath:[local objectForKey:@"path"]]
+                                       durationMs:TNInt([local objectForKey:@"ms"]) loudness:TNDbl([local objectForKey:@"loud"]) error:NULL];
         if (item) {
-            item.videoId = TNStr(local[@"videoId"]);
+            item.videoId = TNStr([local objectForKey:@"videoId"]);
             item.formatName = [item.formatName stringByAppendingString:L(@", downloaded")];
             TNLog(@"loaded %@ from the device: %@", track.name, item.formatName);
             return item;

@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNMatcher.h"
 #import "TNModels.h"
 #import "TNYTMusic.h"
@@ -20,9 +21,9 @@ static NSString *TNNormalize(NSString *s, BOOL strip)
     if (strip) {
         for (NSArray *pair in @[ @[ @"(", @")" ], @[ @"[", @"]" ] ]) {
             while (YES) {
-                NSRange open = [m rangeOfString:pair[0]];
+                NSRange open = [m rangeOfString:[pair objectAtIndex:0]];
                 if (open.location == NSNotFound) break;
-                NSRange close = [m rangeOfString:pair[1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
+                NSRange close = [m rangeOfString:[pair objectAtIndex:1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
                 NSUInteger end = close.location == NSNotFound ? m.length : close.location + 1;
                 [m deleteCharactersInRange:NSMakeRange(open.location, end - open.location)];
             }
@@ -143,26 +144,26 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 - (NSDictionary *)entryFor:(TNTrack *)track
 {
     NSString *key = [track key];
-    @synchronized (self) { return TNDict(_matches[key]); }
+    @synchronized (self) { return TNDict([_matches objectForKey:key]); }
 }
 
 - (NSString *)cachedVideoIdFor:(TNTrack *)track
 {
-    NSString *v = TNStr([self entryFor:track][@"v"]);
+    NSString *v = TNStr([[self entryFor:track] objectForKey:@"v"]);
     return v.length ? v : nil;
 }
 
 - (BOOL)hasFailed:(TNTrack *)track
 {
     NSDictionary *e = [self entryFor:track];
-    return e && !TNStr(e[@"v"]).length && TNDbl(e[@"f"]) > 0;
+    return e && !TNStr([e objectForKey:@"v"]).length && TNDbl([e objectForKey:@"f"]) > 0;
 }
 
 - (BOOL)recentlyFailed:(TNTrack *)track
 {
     NSDictionary *e = [self entryFor:track];
-    double f = TNDbl(e[@"f"]);
-    return !TNStr(e[@"v"]).length && f > 0 && [[NSDate date] timeIntervalSince1970] - f < TNRetryFailedAfter;
+    double f = TNDbl([e objectForKey:@"f"]);
+    return !TNStr([e objectForKey:@"v"]).length && f > 0 && [[NSDate date] timeIntervalSince1970] - f < TNRetryFailedAfter;
 }
 
 - (void)applyTo:(NSArray *)tracks
@@ -179,10 +180,10 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 {
     NSString *key = [track key];
     @synchronized (self) {
-        NSDictionary *old = TNDict(_matches[key]);
-        if (!manual && TNBool(old[@"m"])) return;   // (the user's choice stays)
-        if (videoId.length) _matches[key] = manual ? @{ @"v": videoId, @"m": @YES } : @{ @"v": videoId };
-        else _matches[key] = @{ @"f": @([[NSDate date] timeIntervalSince1970]) };
+        NSDictionary *old = TNDict([_matches objectForKey:key]);
+        if (!manual && TNBool([old objectForKey:@"m"])) return;   // (the user's choice stays)
+        if (videoId.length) TNLegacyDictionarySet(_matches, key, manual ? @{ @"v": videoId, @"m": @YES } : @{ @"v": videoId });
+        else TNLegacyDictionarySet(_matches, key, @{ @"f": @([[NSDate date] timeIntervalSince1970]) });
     }
     [self scheduleSave];
     [self announce:key];
@@ -209,7 +210,7 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 {
     NSUInteger n = 0;
     @synchronized (self) {
-        for (NSString *key in _matches) if (![key hasPrefix:@"alt:"] && TNStr(TNDict(_matches[key])[@"v"]).length) n++;
+        for (NSString *key in _matches) if (![key hasPrefix:@"alt:"] && TNStr([TNDict([_matches objectForKey:key]) objectForKey:@"v"]).length) n++;
     }
     return n;
 }
@@ -291,7 +292,7 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 {
     if (!videoId.length) return nil;
     @synchronized (self) {
-        NSString *v = TNStr(TNDict(_matches[[@"alt:" stringByAppendingString:videoId]])[@"v"]);
+        NSString *v = TNStr([TNDict([_matches objectForKey:[@"alt:" stringByAppendingString:videoId]]) objectForKey:@"v"]);
         return v.length ? v : nil;
     }
 }
@@ -299,7 +300,7 @@ static double TNDurationScore(NSInteger a, NSInteger b)
 - (void)rememberAlternative:(NSString *)alternative for:(NSString *)videoId
 {
     if (!videoId.length || !alternative.length) return;
-    @synchronized (self) { _matches[[@"alt:" stringByAppendingString:videoId]] = @{ @"v": alternative }; }
+    @synchronized (self) { TNLegacyDictionarySet(_matches, [@"alt:" stringByAppendingString:videoId], @{ @"v": alternative }); }
     [self scheduleSave];
 }
 
@@ -326,9 +327,9 @@ static double TNDurationScore(NSInteger a, NSInteger b)
             if (title >= 0.5 && duration >= 0.6 && score >= 0.55) [scored addObject:@[ @(score), c.videoId ]];
         }
     }
-    [scored sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) { return [b[0] compare:a[0]]; }];
+    [scored sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) { return [[b objectAtIndex:0] compare:[a objectAtIndex:0]]; }];
     NSMutableArray *ids = [NSMutableArray array];
-    for (NSArray *s in scored) if (ids.count < 4) [ids addObject:s[1]];
+    for (NSArray *s in scored) if (ids.count < 4) [ids addObject:[s objectAtIndex:1]];
     TNLog(@"alternatives for %@ (%@): %@", track.name, videoId, [ids componentsJoinedByString:@", "]);
     return ids;
 }
@@ -387,7 +388,7 @@ static double TNDurationScore(NSInteger a, NSInteger b)
         TNTrack *t = nil;
         @synchronized (self) {
             if (!_pending.count) { _working = NO; break; }
-            t = _pending[0];
+            t = [_pending objectAtIndex:0];
             [_pending removeObjectAtIndex:0];
             [_pendingKeys removeObject:[t key]];
         }

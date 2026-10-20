@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNAppleMusic.h"
 #import "TNHTTPRequest.h"
 #import "TNModels.h"
@@ -89,8 +90,8 @@ static NSData *TNBase64URLDecode(NSString *s)
         [r runSynchronously];
         if (requestError) { failure = requestError; break; }
         NSInteger status = r.statusCode;
-        if (status >= 300 && status < 400 && r.responseHeaders[@"location"]) {
-            url = [[NSURL URLWithString:r.responseHeaders[@"location"] relativeToURL:url] absoluteURL];
+        if (status >= 300 && status < 400 && [r.responseHeaders objectForKey:@"location"]) {
+            url = [[NSURL URLWithString:[r.responseHeaders objectForKey:@"location"] relativeToURL:url] absoluteURL];
             continue;
         }
         if (statusOut) *statusOut = status;
@@ -138,9 +139,9 @@ static NSData *TNBase64URLDecode(NSString *s)
         for (NSTextCheckingResult *r in [jwtRe matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
             NSString *jwt = [text substringWithRange:r.range];
             NSArray *parts = [jwt componentsSeparatedByString:@"."];
-            NSDictionary *payload = TNDict([TNUtils JSONObjectFromData:TNBase64URLDecode(parts[1])]);
-            if (![TNStr(payload[@"iss"]) isEqualToString:@"AMPWebPlay"]) continue;
-            NSDate *expires = [NSDate dateWithTimeIntervalSince1970:TNDbl(payload[@"exp"])];
+            NSDictionary *payload = TNDict([TNUtils JSONObjectFromData:TNBase64URLDecode([parts objectAtIndex:1])]);
+            if (![TNStr([payload objectForKey:@"iss"]) isEqualToString:@"AMPWebPlay"]) continue;
+            NSDate *expires = [NSDate dateWithTimeIntervalSince1970:TNDbl([payload objectForKey:@"exp"])];
             if ([expires timeIntervalSinceNow] < 3600) continue;
             [TNSettings setAppleDeveloperToken:jwt expires:expires];
             TNLog(@"apple: web player token found at %lu, valid until %@", (unsigned long)offset, expires);
@@ -174,9 +175,9 @@ static NSData *TNBase64URLDecode(NSString *s)
         NSMutableDictionary *headers = [NSMutableDictionary dictionaryWithDictionary:@{
             @"Authorization": [@"Bearer " stringByAppendingString:developer],
             @"Origin": TNAppleWeb, @"Referer": [TNAppleWeb stringByAppendingString:@"/"], @"Accept": @"application/json" }];
-        if (user) headers[@"media-user-token"] = userToken;
+        if (user) TNLegacyDictionarySet(headers, @"media-user-token", userToken);
         NSData *body = bodyJSON ? [TNUtils JSONDataFromObject:bodyJSON] : nil;
-        if (body) headers[@"Content-Type"] = @"application/json";
+        if (body) TNLegacyDictionarySet(headers, @"Content-Type", @"application/json");
         NSInteger status = 0;
         NSData *data = [self fetchSync:url method:method body:body headers:headers status:&status error:error];
         if (!data) return nil;
@@ -193,7 +194,7 @@ static NSData *TNBase64URLDecode(NSString *s)
             if (error) *error = TNMakeError(TNErrorAuth, L(@"Apple Music did not accept the token. Copy a fresh media-user-token from music.apple.com."));
             return nil;
         }
-        NSString *message = TNStr(TNDict([TNArr(json[@"errors"]) firstObject])[@"detail"]) ?: TNStr(TNDict([TNArr(json[@"errors"]) firstObject])[@"title"]);
+        NSString *message = TNStr([TNDict([TNArr([json objectForKey:@"errors"]) firstObject]) objectForKey:@"detail"]) ?: TNStr([TNDict([TNArr([json objectForKey:@"errors"]) firstObject]) objectForKey:@"title"]);
         if (error) *error = TNMakeError(TNErrorAPI, message.length ? [NSString stringWithFormat:L(@"Apple Music: %@"), message]
                                                                    : [NSString stringWithFormat:L(@"Apple Music answered with an error (HTTP %ld)."), (long)status]);
         return nil;
@@ -210,8 +211,8 @@ static NSData *TNBase64URLDecode(NSString *s)
     while (next.length && all.count < max) {
         NSDictionary *json = [self apiGetSync:next user:user error:error];
         if (!json) return all.count ? all : nil;
-        [all addObjectsFromArray:TNArr(json[@"data"]) ?: @[]];
-        NSString *n = TNStr(json[@"next"]);
+        [all addObjectsFromArray:TNArr([json objectForKey:@"data"]) ?: @[]];
+        NSString *n = TNStr([json objectForKey:@"next"]);
         if (n.length && [n rangeOfString:@"limit="].location == NSNotFound) n = [n stringByAppendingString:[n rangeOfString:@"?"].location == NSNotFound ? @"?limit=100" : @"&limit=100"];
         next = n;
     }
@@ -222,28 +223,28 @@ static NSData *TNBase64URLDecode(NSString *s)
 
 static TNTrack *TNTrackFromApple(NSDictionary *item)
 {
-    NSDictionary *a = TNDict(item[@"attributes"]);
-    NSString *name = TNStr(a[@"name"]);
+    NSDictionary *a = TNDict([item objectForKey:@"attributes"]);
+    NSString *name = TNStr([a objectForKey:@"name"]);
     if (!name.length) return nil;
     TNTrack *t = [[TNTrack alloc] init];
     t.name = name;
-    t.byline = TNStr(a[@"artistName"]);
+    t.byline = TNStr([a objectForKey:@"artistName"]);
     TNArtist *artist = [[TNArtist alloc] init];
     artist.name = t.byline;
     if (artist.name.length) t.artists = @[ artist ];
-    NSString *albumName = TNStr(a[@"albumName"]);
+    NSString *albumName = TNStr([a objectForKey:@"albumName"]);
     if (albumName.length) { TNAlbum *album = [[TNAlbum alloc] init]; album.name = albumName; t.album = album; }
-    t.durationMs = TNInt(a[@"durationInMillis"]);
-    t.appleArtwork = TNStr(TNDict(a[@"artwork"])[@"url"]);
-    t.explicitContent = [TNStr(a[@"contentRating"]) isEqualToString:@"explicit"];
-    t.trackNumber = TNInt(a[@"trackNumber"]);
-    t.isrc = TNStr(a[@"isrc"]);
-    NSString *itemId = TNStr(item[@"id"]);
-    NSString *type = TNStr(item[@"type"]) ?: @"";
-    NSDictionary *play = TNDict(a[@"playParams"]);
+    t.durationMs = TNInt([a objectForKey:@"durationInMillis"]);
+    t.appleArtwork = TNStr([TNDict([a objectForKey:@"artwork"]) objectForKey:@"url"]);
+    t.explicitContent = [TNStr([a objectForKey:@"contentRating"]) isEqualToString:@"explicit"];
+    t.trackNumber = TNInt([a objectForKey:@"trackNumber"]);
+    t.isrc = TNStr([a objectForKey:@"isrc"]);
+    NSString *itemId = TNStr([item objectForKey:@"id"]);
+    NSString *type = TNStr([item objectForKey:@"type"]) ?: @"";
+    NSDictionary *play = TNDict([a objectForKey:@"playParams"]);
     if ([type hasPrefix:@"library-"]) {
         t.appleId = itemId;
-        t.appleCatalogId = TNStr(play[@"catalogId"]);
+        t.appleCatalogId = TNStr([play objectForKey:@"catalogId"]);
     } else {
         t.appleCatalogId = itemId;
     }
@@ -254,18 +255,18 @@ static TNTrack *TNTrackFromApple(NSDictionary *item)
 
 static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
 {
-    NSDictionary *a = TNDict(item[@"attributes"]);
+    NSDictionary *a = TNDict([item objectForKey:@"attributes"]);
     TNPlaylist *p = [[TNPlaylist alloc] init];
-    p.playlistId = TNStr(item[@"id"]);
-    p.name = TNStr(a[@"name"]) ?: L(@"Playlist");
-    p.descriptionText = TNStr(TNDict(a[@"description"])[@"standard"]) ?: TNStr(TNDict(a[@"description"])[@"short"]);
-    p.appleArtwork = TNStr(TNDict(a[@"artwork"])[@"url"]);
-    p.author = TNStr(a[@"curatorName"]) ?: TNStr(a[@"artistName"]);
+    p.playlistId = TNStr([item objectForKey:@"id"]);
+    p.name = TNStr([a objectForKey:@"name"]) ?: L(@"Playlist");
+    p.descriptionText = TNStr([TNDict([a objectForKey:@"description"]) objectForKey:@"standard"]) ?: TNStr([TNDict([a objectForKey:@"description"]) objectForKey:@"short"]);
+    p.appleArtwork = TNStr([TNDict([a objectForKey:@"artwork"]) objectForKey:@"url"]);
+    p.author = TNStr([a objectForKey:@"curatorName"]) ?: TNStr([a objectForKey:@"artistName"]);
     p.source = TNSourceApple;
     p.fromLibrary = library;
-    p.modified = TNStr(a[@"lastModifiedDate"]) ?: TNStr(a[@"dateAdded"]);
-    p.trackCount = TNInt(a[@"trackCount"]);
-    p.canEdit = library && TNBool(a[@"canEdit"]);
+    p.modified = TNStr([a objectForKey:@"lastModifiedDate"]) ?: TNStr([a objectForKey:@"dateAdded"]);
+    p.trackCount = TNInt([a objectForKey:@"trackCount"]);
+    p.canEdit = library && TNBool([a objectForKey:@"canEdit"]);
     return p.playlistId.length ? p : nil;
 }
 
@@ -273,19 +274,19 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
 - (void)fillCatalogInfo:(NSArray *)tracks storefront:(NSString *)storefront
 {
     NSMutableDictionary *byCatalogId = [NSMutableDictionary dictionary];
-    for (TNTrack *t in tracks) if (t.appleCatalogId.length && !t.isrc.length) byCatalogId[t.appleCatalogId] = t;
+    for (TNTrack *t in tracks) if (t.appleCatalogId.length && !t.isrc.length) TNLegacyDictionarySet(byCatalogId, t.appleCatalogId, t);
     NSArray *ids = [byCatalogId allKeys];
     for (NSUInteger i = 0; i < ids.count; i += 300) {
         NSArray *batch = [ids subarrayWithRange:NSMakeRange(i, MIN((NSUInteger)300, ids.count - i))];
         NSString *path = [NSString stringWithFormat:@"/v1/catalog/%@/songs?ids=%@", storefront, [batch componentsJoinedByString:@","]];
         NSDictionary *json = [self apiGetSync:path user:NO error:NULL];
-        for (id item in TNArr(json[@"data"]) ?: @[]) {
-            NSDictionary *a = TNDict(TNDict(item)[@"attributes"]);
-            TNTrack *t = byCatalogId[TNStr(TNDict(item)[@"id"]) ?: @""];
+        for (id item in TNArr([json objectForKey:@"data"]) ?: @[]) {
+            NSDictionary *a = TNDict([TNDict(item) objectForKey:@"attributes"]);
+            TNTrack *t = [byCatalogId objectForKey:TNStr([TNDict(item) objectForKey:@"id"]) ?: @""];
             if (!t) continue;
-            t.isrc = TNStr(a[@"isrc"]);
-            if (!t.appleArtwork.length) t.appleArtwork = TNStr(TNDict(a[@"artwork"])[@"url"]);
-            if (!t.durationMs) t.durationMs = TNInt(a[@"durationInMillis"]);
+            t.isrc = TNStr([a objectForKey:@"isrc"]);
+            if (!t.appleArtwork.length) t.appleArtwork = TNStr([TNDict([a objectForKey:@"artwork"]) objectForKey:@"url"]);
+            if (!t.durationMs) t.durationMs = TNInt([a objectForKey:@"durationInMillis"]);
         }
     }
 }
@@ -327,7 +328,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
     dispatch_async(_queue, ^{
         NSError *error = nil;
         NSDictionary *json = [self apiGetSync:@"/v1/me/storefront" user:YES error:&error];
-        NSString *storefront = TNStr(TNDict([TNArr(json[@"data"]) firstObject])[@"id"]);
+        NSString *storefront = TNStr([TNDict([TNArr([json objectForKey:@"data"]) firstObject]) objectForKey:@"id"]);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!storefront.length) {
                 [TNSettings setAppleUserToken:previous];
@@ -368,7 +369,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
     self.syncing = YES;
     [self setStatus:L(@"Loading your playlists…")];
     NSMutableDictionary *old = [NSMutableDictionary dictionary];
-    for (TNPlaylist *p in [[TNLibrary shared] applePlaylists]) old[p.playlistId] = p;
+    for (TNPlaylist *p in [[TNLibrary shared] applePlaylists]) TNLegacyDictionarySet(old, p.playlistId, p);
     dispatch_async(_queue, ^{
         NSError *error = nil;
         NSArray *items = [self allPages:@"/v1/me/library/playlists?limit=100" user:YES max:2000 error:&error];
@@ -377,7 +378,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
             TNPlaylist *p = TNPlaylistFromApple(TNDict(item), YES);
             if (!p) continue;
             p.storefront = [TNSettings appleStorefront];
-            TNPlaylist *was = old[p.playlistId];
+            TNPlaylist *was = [old objectForKey:p.playlistId];
             if (!p.trackCount) p.trackCount = was.trackCount;
             [playlists addObject:p];
         }
@@ -385,7 +386,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
         NSUInteger n = 0;
         for (TNPlaylist *p in items ? playlists : @[]) {
             n++;
-            TNPlaylist *was = old[p.playlistId];
+            TNPlaylist *was = [old objectForKey:p.playlistId];
             __block BOOL have = NO;
             TNOnMainSync(^{ have = [[TNLibrary shared] tracksOfPlaylist:p] != nil; });
             if (have && was && [was.modified isEqualToString:p.modified ?: @""]) continue;
@@ -445,9 +446,9 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
     NSMutableArray *parts = [NSMutableArray array];
     for (NSString *p in [path componentsSeparatedByString:@"/"]) if (p.length) [parts addObject:p];
     TNHTTPTask *task = [[TNHTTPTask alloc] init];
-    NSString *storefront = parts.count >= 3 && [parts[0] length] == 2 ? [parts[0] lowercaseString] : [TNSettings appleStorefront];
-    if (parts.count >= 1 && [parts[0] length] == 2) [parts removeObjectAtIndex:0];
-    NSString *type = parts.count ? parts[0] : @"";
+    NSString *storefront = parts.count >= 3 && [[parts objectAtIndex:0] length] == 2 ? [[parts objectAtIndex:0] lowercaseString] : [TNSettings appleStorefront];
+    if (parts.count >= 1 && [[parts objectAtIndex:0] length] == 2) [parts removeObjectAtIndex:0];
+    NSString *type = parts.count ? [parts objectAtIndex:0] : @"";
     NSString *identifier = parts.count >= 2 ? [parts lastObject] : @"";
     if (!([type isEqualToString:@"playlist"] || [type isEqualToString:@"album"]) || !identifier.length) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -460,7 +461,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
         NSError *error = nil;
         NSString *infoPath = [NSString stringWithFormat:@"/v1/catalog/%@/%@/%@", storefront, album ? @"albums" : @"playlists", [TNUtils urlEncode:identifier]];
         NSDictionary *json = [self apiGetSync:infoPath user:NO error:&error];
-        NSDictionary *item = TNDict([TNArr(json[@"data"]) firstObject]);
+        NSDictionary *item = TNDict([TNArr([json objectForKey:@"data"]) firstObject]);
         TNPlaylist *playlist = item ? TNPlaylistFromApple(item, NO) : nil;
         NSArray *tracks = nil;
         if (playlist) {
@@ -498,8 +499,8 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
         __block NSArray *old = nil;
         TNOnMainSync(^{ old = [[TNLibrary shared] appleSongs]; });
         NSMutableDictionary *known = [NSMutableDictionary dictionary];
-        for (TNTrack *t in old) if (t.appleCatalogId.length && t.isrc.length) known[t.appleCatalogId] = t.isrc;
-        for (TNTrack *t in songs) if (t.appleCatalogId.length && known[t.appleCatalogId]) t.isrc = known[t.appleCatalogId];
+        for (TNTrack *t in old) if (t.appleCatalogId.length && t.isrc.length) TNLegacyDictionarySet(known, t.appleCatalogId, t.isrc);
+        for (TNTrack *t in songs) if (t.appleCatalogId.length && [known objectForKey:t.appleCatalogId]) t.isrc = [known objectForKey:t.appleCatalogId];
         [self fillCatalogInfo:songs storefront:storefront];
         TNOnMainSync(^{ [[TNLibrary shared] setAppleSongs:songs]; });
         TNLog(@"apple: %lu library songs", (unsigned long)songs.count);
@@ -512,7 +513,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
         NSMutableArray *out = [NSMutableArray array];
         for (id x in recent) {
             NSDictionary *item = TNDict(x);
-            NSString *type = TNStr(item[@"type"]) ?: @"";
+            NSString *type = TNStr([item objectForKey:@"type"]) ?: @"";
             BOOL library = [type hasPrefix:@"library-"];
             TNPlaylist *p = TNPlaylistFromApple(item, library);
             if (!p) continue;
@@ -530,7 +531,7 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
 {
     if (![TNSettings syncAppleLikes]) return;
     NSMutableDictionary *byId = [NSMutableDictionary dictionary];
-    for (TNTrack *t in songs) if (t.appleCatalogId.length) byId[t.appleCatalogId] = t;
+    for (TNTrack *t in songs) if (t.appleCatalogId.length) TNLegacyDictionarySet(byId, t.appleCatalogId, t);
     NSArray *ids = [byId allKeys];
     if (ids.count > TNMaxRatingLookups) ids = [ids subarrayWithRange:NSMakeRange(0, TNMaxRatingLookups)];
     NSMutableArray *loved = [NSMutableArray array];
@@ -539,10 +540,10 @@ static TNPlaylist *TNPlaylistFromApple(NSDictionary *item, BOOL library)
         [self setStatus:[NSString stringWithFormat:L(@"Loved songs: %lu of %lu"), (unsigned long)i, (unsigned long)ids.count]];
         NSDictionary *json = [self apiGetSync:[@"/v1/me/ratings/songs?ids=" stringByAppendingString:[batch componentsJoinedByString:@","]] user:YES error:NULL];
         if (!json) break;
-        for (id x in TNArr(json[@"data"]) ?: @[]) {
+        for (id x in TNArr([json objectForKey:@"data"]) ?: @[]) {
             NSDictionary *item = TNDict(x);
-            if (TNInt(TNDict(item[@"attributes"])[@"value"]) != 1) continue;
-            TNTrack *t = byId[TNStr(item[@"id"]) ?: @""];
+            if (TNInt([TNDict([item objectForKey:@"attributes"]) objectForKey:@"value"]) != 1) continue;
+            TNTrack *t = [byId objectForKey:TNStr([item objectForKey:@"id"]) ?: @""];
             if (t) [loved addObject:t];
         }
     }
@@ -558,9 +559,9 @@ static NSString *TNPlainTitle(NSString *title)
     NSMutableString *m = [[title ?: @"" lowercaseString] mutableCopy];
     for (NSArray *pair in @[ @[ @"(", @")" ], @[ @"[", @"]" ] ]) {
         while (YES) {
-            NSRange open = [m rangeOfString:pair[0]];
+            NSRange open = [m rangeOfString:[pair objectAtIndex:0]];
             if (open.location == NSNotFound || open.location == 0) break;
-            NSRange close = [m rangeOfString:pair[1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
+            NSRange close = [m rangeOfString:[pair objectAtIndex:1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
             NSUInteger end = close.location == NSNotFound ? m.length : close.location + 1;
             [m deleteCharactersInRange:NSMakeRange(open.location, end - open.location)];
         }
@@ -579,30 +580,30 @@ static NSString *TNPlainTitle(NSString *title)
     static dispatch_once_t once;
     dispatch_once(&once, ^{ cache = [NSMutableDictionary dictionary]; });
     NSString *key = [track key];
-    @synchronized (cache) { if (cache[key]) return [cache[key] length] ? cache[key] : nil; }
+    @synchronized (cache) { if ([cache objectForKey:key]) return [[cache objectForKey:key] length] ? [cache objectForKey:key] : nil; }
     NSString *storefront = [TNSettings appleStorefront];
     NSString *found = nil;
     if (track.isrc.length) {
         NSDictionary *json = [self apiGetSync:[NSString stringWithFormat:@"/v1/catalog/%@/songs?filter%%5Bisrc%%5D=%@", storefront, [TNUtils urlEncode:track.isrc]] user:NO error:NULL];
-        found = TNStr(TNDict([TNArr(json[@"data"]) firstObject])[@"id"]);
+        found = TNStr([TNDict([TNArr([json objectForKey:@"data"]) firstObject]) objectForKey:@"id"]);
     }
     if (!found.length && track.name.length) {
         NSString *artist = [(TNArtist *)track.artists.firstObject name] ?: [track artistNames] ?: @"";
         NSString *term = [NSString stringWithFormat:@"%@ %@", TNPlainTitle(track.name), artist];
         NSDictionary *json = [self apiGetSync:[NSString stringWithFormat:@"/v1/catalog/%@/search?types=songs&limit=10&term=%@", storefront, [TNUtils urlEncode:term]] user:NO error:NULL];
         NSString *title = TNPlainTitle(track.name), *who = [artist lowercaseString];
-        for (id x in TNArr(TNDict(TNDict(json[@"results"])[@"songs"])[@"data"]) ?: @[]) {
-            NSDictionary *a = TNDict(TNDict(x)[@"attributes"]);
-            NSString *t = TNPlainTitle(TNStr(a[@"name"]));
-            NSString *by = [TNStr(a[@"artistName"]) lowercaseString] ?: @"";
+        for (id x in TNArr([TNDict([TNDict([json objectForKey:@"results"]) objectForKey:@"songs"]) objectForKey:@"data"]) ?: @[]) {
+            NSDictionary *a = TNDict([TNDict(x) objectForKey:@"attributes"]);
+            NSString *t = TNPlainTitle(TNStr([a objectForKey:@"name"]));
+            NSString *by = [TNStr([a objectForKey:@"artistName"]) lowercaseString] ?: @"";
             BOOL titleFits = t.length && ([t isEqualToString:title] || [t hasPrefix:title] || [title hasPrefix:t]);
             BOOL artistFits = !who.length || [by rangeOfString:who].location != NSNotFound || [who rangeOfString:by].location != NSNotFound;
-            NSInteger ms = TNInt(a[@"durationInMillis"]);
+            NSInteger ms = TNInt([a objectForKey:@"durationInMillis"]);
             BOOL lengthFits = !ms || !track.durationMs || labs((long)(ms - track.durationMs)) <= 8000;
-            if (titleFits && artistFits && lengthFits) { found = TNStr(TNDict(x)[@"id"]); break; }
+            if (titleFits && artistFits && lengthFits) { found = TNStr([TNDict(x) objectForKey:@"id"]); break; }
         }
     }
-    @synchronized (cache) { cache[key] = found ?: @""; }
+    @synchronized (cache) { TNLegacyDictionarySet(cache, key, found ?: @""); }
     if (!found.length) TNLog(@"apple: no catalog song for %@ - %@", [track artistNames], track.name);
     return found.length ? found : nil;
 }
@@ -664,10 +665,10 @@ static NSString *TNPlainTitle(NSString *title)
     dispatch_async(_queue, ^{
         NSArray *data = [self resourcesFor:tracks];
         NSMutableDictionary *body = [NSMutableDictionary dictionaryWithDictionary:@{ @"attributes": @{ @"name": name ?: L(@"New playlist"), @"description": L(@"Made in Muzika") } }];
-        if (data.count) body[@"relationships"] = @{ @"tracks": @{ @"data": data } };
+        if (data.count) TNLegacyDictionarySet(body, @"relationships", @{ @"tracks": @{ @"data": data } });
         NSError *error = nil;
         NSDictionary *json = [self apiSync:@"POST" path:@"/v1/me/library/playlists" body:body user:YES error:&error];
-        TNPlaylist *playlist = TNPlaylistFromApple(TNDict([TNArr(json[@"data"]) firstObject]), YES);
+        TNPlaylist *playlist = TNPlaylistFromApple(TNDict([TNArr([json objectForKey:@"data"]) firstObject]), YES);
         if (playlist) {
             playlist.canEdit = YES;
             playlist.storefront = [TNSettings appleStorefront];
@@ -704,16 +705,16 @@ static NSString *TNPlainTitle(NSString *title)
         NSError *error = nil;
         NSString *path = [NSString stringWithFormat:@"/v1/catalog/%@/charts?types=songs,albums,playlists&limit=50&with=dailyGlobalTopCharts,cityCharts", storefront];
         NSDictionary *json = [self apiGetSync:path user:NO error:&error];
-        NSDictionary *results = TNDict(json[@"results"]);
+        NSDictionary *results = TNDict([json objectForKey:@"results"]);
         NSMutableArray *shelves = [NSMutableArray array];
         for (NSString *kind in @[ @"songs", @"dailyGlobalTopCharts", @"playlists", @"albums", @"cityCharts" ]) {
-            for (id x in TNArr(results[kind]) ?: @[]) {
+            for (id x in TNArr([results objectForKey:kind]) ?: @[]) {
                 NSDictionary *chart = TNDict(x);
                 NSMutableArray *items = [NSMutableArray array];
                 BOOL songs = NO;
-                for (id y in TNArr(chart[@"data"]) ?: @[]) {
+                for (id y in TNArr([chart objectForKey:@"data"]) ?: @[]) {
                     NSDictionary *item = TNDict(y);
-                    NSString *type = TNStr(item[@"type"]) ?: @"";
+                    NSString *type = TNStr([item objectForKey:@"type"]) ?: @"";
                     if ([type isEqualToString:@"songs"]) {
                         TNTrack *t = TNTrackFromApple(item);
                         if (t) { [items addObject:t]; songs = YES; }
@@ -727,7 +728,7 @@ static NSString *TNPlainTitle(NSString *title)
                 }
                 if (!items.count) continue;
                 TNShelf *shelf = [[TNShelf alloc] init];
-                shelf.title = TNStr(chart[@"name"]) ?: L(@"Charts");
+                shelf.title = TNStr([chart objectForKey:@"name"]) ?: L(@"Charts");
                 shelf.items = items;
                 shelf.songs = songs;
                 [shelves addObject:shelf];

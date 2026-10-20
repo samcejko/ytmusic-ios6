@@ -76,7 +76,7 @@ static __weak TNActionSheet *TNShownSheet;
 - (void)actionSheet:(UIActionSheet *)sheet didDismissWithButtonIndex:(NSInteger)index
 {
     if (index >= 0 && index < (NSInteger)self.actions.count) {
-        id action = self.actions[(NSUInteger)index];
+        id action = [self.actions objectAtIndex:(NSUInteger)index];
         if (action != [NSNull null]) ((dispatch_block_t)action)();
     }
     self.keepAlive = nil;
@@ -266,7 +266,7 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
 {
     NSRange q = [url rangeOfString:@"?"];
     if (q.location == NSNotFound) return nil;
-    return [TNUtils parseQuery:[url substringFromIndex:q.location + 1]][name];
+    return [[TNUtils parseQuery:[url substringFromIndex:q.location + 1]] objectForKey:name];
 }
 
 + (BOOL)openURL:(NSString *)url
@@ -296,10 +296,10 @@ static NSString *TNQueryParam(NSString *url, NSString *name)
     if (video.length) {
         [TNYTMusic radioFor:video playlistId:list completion:^(TNWatchQueue *queue, NSError *error) {
             NSUInteger start = 0;
-            for (NSUInteger i = 0; i < queue.tracks.count; i++) if ([((TNTrack *)queue.tracks[i]).videoId isEqualToString:video]) { start = i; break; }
+            for (NSUInteger i = 0; i < queue.tracks.count; i++) if ([((TNTrack *)[queue.tracks objectAtIndex:i]).videoId isEqualToString:video]) { start = i; break; }
             if (!queue.tracks.count) { [self toast:error.localizedDescription ?: L(@"This song cannot be played.")]; return; }
             [TNPlayer shared].shuffle = NO;
-            [[TNPlayer shared] playTracks:queue.tracks startingAt:start contextURI:[@"radio:" stringByAppendingString:video] contextName:((TNTrack *)queue.tracks[start]).name];
+            [[TNPlayer shared] playTracks:queue.tracks startingAt:start contextURI:[@"radio:" stringByAppendingString:video] contextName:((TNTrack *)[queue.tracks objectAtIndex:start]).name];
         }];
         return YES;
     }

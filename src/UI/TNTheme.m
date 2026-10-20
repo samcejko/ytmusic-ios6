@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNTheme.h"
 #import "TNModern.h"
 #import "TNCommon.h"
@@ -85,10 +86,10 @@ static UIImage *TNBarImage(UIColor *top, UIColor *bottom, UIColor *highlight, UI
 
 - (id)cached:(NSString *)key build:(id (^)(void))build
 {
-    id v = self.cache[key];
+    id v = [self.cache objectForKey:key];
     if (!v) {
         v = build();
-        if (v) self.cache[key] = v;
+        if (v) TNLegacyDictionarySet(self.cache, key, v);
     }
     return v;
 }

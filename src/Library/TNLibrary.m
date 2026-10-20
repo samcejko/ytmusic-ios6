@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNLibrary.h"
 #import "TNAppleMusic.h"
 #import "TNModels.h"
@@ -63,19 +64,19 @@ static NSArray *TNJSONOf(NSArray *items)
         _tracks = [NSMutableDictionary dictionary];
         NSString *path = [[TNLibrary folder] stringByAppendingPathComponent:@"library.json"];
         NSDictionary *json = TNDict([TNUtils JSONObjectFromData:[NSData dataWithContentsOfFile:path]]);
-        _liked = TNTracksFrom(json[@"liked"]);
-        _recent = TNTracksFrom(json[@"recent"]);
+        _liked = TNTracksFrom([json objectForKey:@"liked"]);
+        _recent = TNTracksFrom([json objectForKey:@"recent"]);
         _albums = [NSMutableArray array];
-        for (id x in TNArr(json[@"albums"]) ?: @[]) { TNAlbum *a = [TNAlbum fromJSON:TNDict(x)]; if (a) [_albums addObject:a]; }
+        for (id x in TNArr([json objectForKey:@"albums"]) ?: @[]) { TNAlbum *a = [TNAlbum fromJSON:TNDict(x)]; if (a) [_albums addObject:a]; }
         _artists = [NSMutableArray array];
-        for (id x in TNArr(json[@"artists"]) ?: @[]) { TNArtist *a = [TNArtist fromJSON:TNDict(x)]; if (a) [_artists addObject:a]; }
+        for (id x in TNArr([json objectForKey:@"artists"]) ?: @[]) { TNArtist *a = [TNArtist fromJSON:TNDict(x)]; if (a) [_artists addObject:a]; }
         _playlists = [NSMutableArray array];
-        for (id x in TNArr(json[@"playlists"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [_playlists addObject:p]; }
+        for (id x in TNArr([json objectForKey:@"playlists"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [_playlists addObject:p]; }
         NSMutableArray *apple = [NSMutableArray array];
-        for (id x in TNArr(json[@"apple"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [apple addObject:p]; }
+        for (id x in TNArr([json objectForKey:@"apple"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [apple addObject:p]; }
         _applePlaylists = apple;
         NSMutableArray *recent = [NSMutableArray array];
-        for (id x in TNArr(json[@"appleRecent"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [recent addObject:p]; }
+        for (id x in TNArr([json objectForKey:@"appleRecent"]) ?: @[]) { TNPlaylist *p = [TNPlaylist fromJSON:TNDict(x)]; if (p) [recent addObject:p]; }
         _appleRecent = recent;
     }
     return self;
@@ -111,7 +112,7 @@ static NSArray *TNJSONOf(NSArray *items)
 - (NSInteger)indexOfTrack:(TNTrack *)track in:(NSArray *)list
 {
     NSString *key = [track key];
-    for (NSUInteger i = 0; i < list.count; i++) if ([[list[i] key] isEqualToString:key]) return (NSInteger)i;
+    for (NSUInteger i = 0; i < list.count; i++) if ([[[list objectAtIndex:i] key] isEqualToString:key]) return (NSInteger)i;
     return -1;
 }
 
@@ -145,7 +146,7 @@ static NSArray *TNJSONOf(NSArray *items)
 
 - (NSInteger)indexOfAlbum:(TNAlbum *)album
 {
-    for (NSUInteger i = 0; i < _albums.count; i++) if ([[_albums[i] browseId] isEqualToString:album.browseId]) return (NSInteger)i;
+    for (NSUInteger i = 0; i < _albums.count; i++) if ([[[_albums objectAtIndex:i] browseId] isEqualToString:album.browseId]) return (NSInteger)i;
     return -1;
 }
 
@@ -167,7 +168,7 @@ static NSArray *TNJSONOf(NSArray *items)
 
 - (NSInteger)indexOfArtist:(TNArtist *)artist
 {
-    for (NSUInteger i = 0; i < _artists.count; i++) if ([[_artists[i] browseId] isEqualToString:artist.browseId]) return (NSInteger)i;
+    for (NSUInteger i = 0; i < _artists.count; i++) if ([[[_artists objectAtIndex:i] browseId] isEqualToString:artist.browseId]) return (NSInteger)i;
     return -1;
 }
 
@@ -188,7 +189,7 @@ static NSArray *TNJSONOf(NSArray *items)
 - (NSInteger)indexOfPlaylist:(TNPlaylist *)playlist
 {
     NSString *key = [playlist key];
-    for (NSUInteger i = 0; i < _playlists.count; i++) if ([[_playlists[i] key] isEqualToString:key]) return (NSInteger)i;
+    for (NSUInteger i = 0; i < _playlists.count; i++) if ([[[_playlists objectAtIndex:i] key] isEqualToString:key]) return (NSInteger)i;
     return -1;
 }
 
@@ -256,19 +257,19 @@ static NSArray *TNJSONOf(NSArray *items)
 {
     if (!playlist.playlistId.length) return nil;
     NSString *key = [playlist key];
-    NSArray *cached = _tracks[key];
+    NSArray *cached = [_tracks objectForKey:key];
     if (cached) return cached;
     NSData *data = [NSData dataWithContentsOfFile:[self fileForPlaylist:playlist]];
     if (!data) return nil;
     NSArray *tracks = TNTracksFrom([TNUtils JSONObjectFromData:data]);
-    _tracks[key] = tracks;
+    TNLegacyDictionarySet(_tracks, key, tracks);
     return tracks;
 }
 
 - (void)setTracks:(NSArray *)tracks ofPlaylist:(TNPlaylist *)playlist
 {
     if (!playlist.playlistId.length) return;
-    _tracks[[playlist key]] = [tracks copy] ?: @[];
+    TNLegacyDictionarySet(_tracks, [playlist key], [tracks copy] ?: @[]);
     NSArray *json = TNJSONOf(tracks);
     NSString *path = [self fileForPlaylist:playlist];
     dispatch_async(_io, ^{
@@ -304,7 +305,7 @@ static NSArray *TNJSONOf(NSArray *items)
 - (TNPlaylist *)ownPlaylist:(TNPlaylist *)playlist
 {
     NSInteger i = [self indexOfPlaylist:playlist];
-    return i >= 0 ? _playlists[(NSUInteger)i] : nil;
+    return i >= 0 ? [_playlists objectAtIndex:(NSUInteger)i] : nil;
 }
 
 - (TNPlaylist *)createPlaylistNamed:(NSString *)name tracks:(NSArray *)tracks

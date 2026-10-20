@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNDownloads.h"
 #import "TNModels.h"
 #import "TNStreams.h"
@@ -68,10 +69,10 @@ static NSString *TNSafeName(NSString *key)
         _entries = [NSMutableArray array];
         for (id e in TNArr([TNUtils JSONObjectFromData:[NSData dataWithContentsOfFile:[TNDownloads indexPath]]]) ?: @[]) {
             NSDictionary *d = TNDict(e);
-            NSString *key = TNStr(d[@"key"]);
-            if (!key.length || ![[NSFileManager defaultManager] fileExistsAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr(d[@"file"]) ?: @""]]) continue;
+            NSString *key = TNStr([d objectForKey:@"key"]);
+            if (!key.length || ![[NSFileManager defaultManager] fileExistsAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr([d objectForKey:@"file"]) ?: @""]]) continue;
             [_entries addObject:d];
-            _byKey[key] = d;
+            TNLegacyDictionarySet(_byKey, key, d);
         }
     }
     return self;
@@ -94,16 +95,16 @@ static NSString *TNSafeName(NSString *key)
 {
     if (!track) return nil;
     NSDictionary *e;
-    @synchronized (_byKey) { e = _byKey[[track key]]; }
+    @synchronized (_byKey) { e = [_byKey objectForKey:[track key]]; }
     if (!e) return nil;
     NSMutableDictionary *d = [e mutableCopy];
-    d[@"path"] = [[TNDownloads folder] stringByAppendingPathComponent:TNStr(e[@"file"]) ?: @""];
+    TNLegacyDictionarySet(d, @"path", [[TNDownloads folder] stringByAppendingPathComponent:TNStr([e objectForKey:@"file"]) ?: @""]);
     return d;
 }
 
 - (BOOL)isDownloaded:(TNTrack *)track
 {
-    @synchronized (_byKey) { return track && _byKey[[track key]] != nil; }
+    @synchronized (_byKey) { return track && [_byKey objectForKey:[track key]] != nil; }
 }
 
 - (BOOL)isWaiting:(TNTrack *)track { return track && [_queuedKeys containsObject:[track key]]; }
@@ -111,14 +112,14 @@ static NSString *TNSafeName(NSString *key)
 - (NSArray *)downloadedTracks
 {
     NSMutableArray *out = [NSMutableArray array];
-    for (NSDictionary *e in _entries) { TNTrack *t = [TNTrack fromJSON:TNDict(e[@"track"])]; if (t) [out addObject:t]; }
+    for (NSDictionary *e in _entries) { TNTrack *t = [TNTrack fromJSON:TNDict([e objectForKey:@"track"])]; if (t) [out addObject:t]; }
     return out;
 }
 
 - (unsigned long long)bytesUsed
 {
     unsigned long long n = 0;
-    for (NSDictionary *e in _entries) n += (unsigned long long)[e[@"size"] longLongValue];
+    for (NSDictionary *e in _entries) n += (unsigned long long)[[e objectForKey:@"size"] longLongValue];
     return n;
 }
 
@@ -144,10 +145,10 @@ static NSString *TNSafeName(NSString *key)
 {
     NSString *key = [track key];
     NSDictionary *e;
-    @synchronized (_byKey) { e = _byKey[key]; [_byKey removeObjectForKey:key]; }
+    @synchronized (_byKey) { e = [_byKey objectForKey:key]; [_byKey removeObjectForKey:key]; }
     if (!e) return;
     [_entries removeObject:e];
-    [[NSFileManager defaultManager] removeItemAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr(e[@"file"]) ?: @""] error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr([e objectForKey:@"file"]) ?: @""] error:NULL];
     [self save];
     [self announce];
 }
@@ -155,7 +156,7 @@ static NSString *TNSafeName(NSString *key)
 - (void)removeAll
 {
     [self cancelPending];
-    for (NSDictionary *e in [_entries copy]) [[NSFileManager defaultManager] removeItemAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr(e[@"file"]) ?: @""] error:NULL];
+    for (NSDictionary *e in [_entries copy]) [[NSFileManager defaultManager] removeItemAtPath:[[TNDownloads folder] stringByAppendingPathComponent:TNStr([e objectForKey:@"file"]) ?: @""] error:NULL];
     [_entries removeAllObjects];
     @synchronized (_byKey) { [_byKey removeAllObjects]; }
     [self save];
@@ -192,7 +193,7 @@ static NSString *TNSafeName(NSString *key)
         return;
     }
     _working = YES;
-    TNTrack *t = _queue[0];
+    TNTrack *t = [_queue objectAtIndex:0];
     [_queue removeObjectAtIndex:0];
     self.waitingCount = _queue.count + 1;
     self.progress = 0;
@@ -206,7 +207,7 @@ static NSString *TNSafeName(NSString *key)
             self->_done++;
             if (entry) {
                 [self->_entries insertObject:entry atIndex:0];
-                @synchronized (self->_byKey) { self->_byKey[entry[@"key"]] = entry; }
+                @synchronized (self->_byKey) { TNLegacyDictionarySet(self->_byKey, [entry objectForKey:@"key"], entry); }
                 [self save];
             } else {
                 TNLog(@"download of %@ failed: %@", t.name, error.localizedDescription);

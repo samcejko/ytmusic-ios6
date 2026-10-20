@@ -264,16 +264,16 @@ enum { TNSideMain, TNSideLibrary, TNSideApple, TNSideSectionCount };
             icon = connected ? TNIconCloud : TNIconPlus;
             current = !self.selectedPlaylist && self.selected == TNSectionApple;
         } else {
-            TNPlaylist *p = self.playlists[(NSUInteger)indexPath.row - 1];
+            TNPlaylist *p = [self.playlists objectAtIndex:(NSUInteger)indexPath.row - 1];
             cell.label.text = [TNUtils displayText:p.name];
             icon = TNIconPlaylist;
             current = [[p key] isEqualToString:self.selectedPlaylist];
         }
     } else {
-        NSDictionary *row = (indexPath.section == TNSideMain ? self.mainRows : self.libraryRows)[(NSUInteger)indexPath.row];
-        cell.label.text = row[@"title"];
-        icon = (TNIcon)[row[@"icon"] integerValue];
-        current = !self.selectedPlaylist && [row[@"section"] integerValue] == self.selected;
+        NSDictionary *row = [(indexPath.section == TNSideMain ? self.mainRows : self.libraryRows) objectAtIndex:(NSUInteger)indexPath.row];
+        cell.label.text = [row objectForKey:@"title"];
+        icon = (TNIcon)[[row objectForKey:@"icon"] integerValue];
+        current = !self.selectedPlaylist && [[row objectForKey:@"section"] integerValue] == self.selected;
     }
     cell.current = current;
     cell.icon.image = [theme icon:icon size:20 color:current ? [theme accentTextColor] : [theme secondaryTextColor]];
@@ -285,11 +285,11 @@ enum { TNSideMain, TNSideLibrary, TNSideApple, TNSideSectionCount };
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == TNSideApple) {
         if (indexPath.row == 0) { [self openApple]; return; }
-        if (self.onPlaylist) self.onPlaylist(self.playlists[(NSUInteger)indexPath.row - 1]);
+        if (self.onPlaylist) self.onPlaylist([self.playlists objectAtIndex:(NSUInteger)indexPath.row - 1]);
         return;
     }
-    NSDictionary *row = (indexPath.section == TNSideMain ? self.mainRows : self.libraryRows)[(NSUInteger)indexPath.row];
-    if (self.onSection) self.onSection((TNSection)[row[@"section"] integerValue]);
+    NSDictionary *row = [(indexPath.section == TNSideMain ? self.mainRows : self.libraryRows) objectAtIndex:(NSUInteger)indexPath.row];
+    if (self.onSection) self.onSection((TNSection)[[row objectForKey:@"section"] integerValue]);
 }
 
 @end

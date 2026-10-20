@@ -22,7 +22,7 @@ static NSString *TNListParam(NSString *url)
 {
     NSRange q = [url rangeOfString:@"?"];
     if (q.location == NSNotFound) return nil;
-    return [TNUtils parseQuery:[url substringFromIndex:q.location + 1]][@"list"];
+    return [[TNUtils parseQuery:[url substringFromIndex:q.location + 1]] objectForKey:@"list"];
 }
 
 + (BOOL)isYouTubePlaylistLink:(NSString *)text
@@ -67,9 +67,9 @@ static NSString *TNListParam(NSString *url)
     }
     NSArray *parts = [path componentsSeparatedByString:@"/"];
     for (NSUInteger i = 0; i + 1 < parts.count; i++) {
-        NSString *type = parts[i];
+        NSString *type = [parts objectAtIndex:i];
         if ([type isEqualToString:@"playlist"] || [type isEqualToString:@"album"] || [type isEqualToString:@"track"]) {
-            NSString *identifier = [[parts[i + 1] componentsSeparatedByString:@"#"] firstObject];
+            NSString *identifier = [[[parts objectAtIndex:i + 1] componentsSeparatedByString:@"#"] firstObject];
             if (identifier.length) return [NSString stringWithFormat:@"https://open.spotify.com/embed/%@/%@", type, identifier];
         }
     }
@@ -78,11 +78,11 @@ static NSString *TNListParam(NSString *url)
 
 static TNTrack *TNTrackFromSpotify(NSDictionary *d)
 {
-    NSString *title = TNStr(d[@"title"]) ?: TNStr(d[@"name"]);
+    NSString *title = TNStr([d objectForKey:@"title"]) ?: TNStr([d objectForKey:@"name"]);
     if (!title.length) return nil;
     TNTrack *t = [[TNTrack alloc] init];
     t.name = title;
-    NSString *by = [TNStr(d[@"subtitle"]) ?: @"" stringByReplacingOccurrencesOfString:[NSString stringWithFormat:@"%C", (unichar)0xa0] withString:@" "];
+    NSString *by = [TNStr([d objectForKey:@"subtitle"]) ?: @"" stringByReplacingOccurrencesOfString:[NSString stringWithFormat:@"%C", (unichar)0xa0] withString:@" "];
     t.byline = by;
     NSMutableArray *artists = [NSMutableArray array];
     for (NSString *name in [by componentsSeparatedByString:@", "]) {
@@ -92,9 +92,9 @@ static TNTrack *TNTrackFromSpotify(NSDictionary *d)
         [artists addObject:a];
     }
     t.artists = artists;
-    t.durationMs = TNInt(d[@"duration"]);
-    t.explicitContent = TNBool(d[@"isExplicit"]);
-    NSString *uri = TNStr(d[@"uri"]) ?: @"";
+    t.durationMs = TNInt([d objectForKey:@"duration"]);
+    t.explicitContent = TNBool([d objectForKey:@"isExplicit"]);
+    NSString *uri = TNStr([d objectForKey:@"uri"]) ?: @"";
     t.spotifyId = [[uri componentsSeparatedByString:@":"] lastObject];
     if (!t.spotifyId.length) t.spotifyId = [NSString stringWithFormat:@"%@|%@", title, by];
     return t;
@@ -114,14 +114,14 @@ static TNTrack *TNTrackFromSpotify(NSDictionary *d)
             if (end.location != NSNotFound) {
                 NSData *json = [[html substringWithRange:NSMakeRange(from, end.location - from)] dataUsingEncoding:NSUTF8StringEncoding];
                 NSDictionary *root = TNDict([TNUtils JSONObjectFromData:json]);
-                entity = TNDict(TNDict(TNDict(TNDict(TNDict(root[@"props"])[@"pageProps"])[@"state"])[@"data"])[@"entity"]);
+                entity = TNDict([TNDict([TNDict([TNDict([TNDict([root objectForKey:@"props"]) objectForKey:@"pageProps"]) objectForKey:@"state"]) objectForKey:@"data"]) objectForKey:@"entity"]);
             }
         }
         NSMutableArray *tracks = [NSMutableArray array];
-        for (id x in TNArr(entity[@"trackList"]) ?: @[]) { TNTrack *t = TNTrackFromSpotify(TNDict(x)); if (t) [tracks addObject:t]; }
-        if (!tracks.count && [TNStr(entity[@"type"]) isEqualToString:@"track"]) {
-            TNTrack *t = TNTrackFromSpotify(@{ @"title": TNStr(entity[@"name"]) ?: @"", @"uri": TNStr(entity[@"uri"]) ?: @"", @"duration": entity[@"duration"] ?: @0,
-                                               @"subtitle": [TNArr([TNArr(entity[@"artists"]) valueForKey:@"name"]) componentsJoinedByString:@", "] ?: @"" });
+        for (id x in TNArr([entity objectForKey:@"trackList"]) ?: @[]) { TNTrack *t = TNTrackFromSpotify(TNDict(x)); if (t) [tracks addObject:t]; }
+        if (!tracks.count && [TNStr([entity objectForKey:@"type"]) isEqualToString:@"track"]) {
+            TNTrack *t = TNTrackFromSpotify(@{ @"title": TNStr([entity objectForKey:@"name"]) ?: @"", @"uri": TNStr([entity objectForKey:@"uri"]) ?: @"", @"duration": [entity objectForKey:@"duration"] ?: @0,
+                                               @"subtitle": [TNArr([TNArr([entity objectForKey:@"artists"]) valueForKey:@"name"]) componentsJoinedByString:@", "] ?: @"" });
             if (t) [tracks addObject:t];
         }
         if (!tracks.count) {
@@ -131,20 +131,20 @@ static TNTrack *TNTrackFromSpotify(NSDictionary *d)
         }
         NSMutableArray *thumbs = [NSMutableArray array];
         // the cover in its sizes ({url, maxWidth}), else the one of coverArt (no size given)
-        for (id x in TNArr(TNDict(entity[@"visualIdentity"])[@"image"]) ?: @[]) {
+        for (id x in TNArr([TNDict([entity objectForKey:@"visualIdentity"]) objectForKey:@"image"]) ?: @[]) {
             NSDictionary *d = TNDict(x);
-            NSInteger w = TNInt(d[@"maxWidth"]) ?: 300;
-            if (TNStr(d[@"url"]).length) [thumbs addObject:@{ @"url": d[@"url"], @"width": @(w), @"height": @(TNInt(d[@"maxHeight"]) ?: w) }];
+            NSInteger w = TNInt([d objectForKey:@"maxWidth"]) ?: 300;
+            if (TNStr([d objectForKey:@"url"]).length) [thumbs addObject:@{ @"url": [d objectForKey:@"url"], @"width": @(w), @"height": @(TNInt([d objectForKey:@"maxHeight"]) ?: w) }];
         }
         if (!thumbs.count) {
-            for (id x in TNArr(TNDict(entity[@"coverArt"])[@"sources"]) ?: @[]) {
+            for (id x in TNArr([TNDict([entity objectForKey:@"coverArt"]) objectForKey:@"sources"]) ?: @[]) {
                 NSDictionary *d = TNDict(x);
-                NSInteger w = TNInt(d[@"width"]) ?: 300;
-                if (TNStr(d[@"url"]).length) [thumbs addObject:@{ @"url": d[@"url"], @"width": @(w), @"height": @(TNInt(d[@"height"]) ?: w) }];
+                NSInteger w = TNInt([d objectForKey:@"width"]) ?: 300;
+                if (TNStr([d objectForKey:@"url"]).length) [thumbs addObject:@{ @"url": [d objectForKey:@"url"], @"width": @(w), @"height": @(TNInt([d objectForKey:@"height"]) ?: w) }];
             }
         }
-        TNPlaylist *p = [[TNLibrary shared] createPlaylistNamed:TNStr(entity[@"name"]) ?: TNStr(entity[@"title"]) ?: L(@"Spotify playlist") tracks:tracks];
-        p.author = [NSString stringWithFormat:L(@"From Spotify%@"), TNStr(entity[@"subtitle"]).length ? [@" • " stringByAppendingString:entity[@"subtitle"]] : @""];
+        TNPlaylist *p = [[TNLibrary shared] createPlaylistNamed:TNStr([entity objectForKey:@"name"]) ?: TNStr([entity objectForKey:@"title"]) ?: L(@"Spotify playlist") tracks:tracks];
+        p.author = [NSString stringWithFormat:L(@"From Spotify%@"), TNStr([entity objectForKey:@"subtitle"]).length ? [@" • " stringByAppendingString:[entity objectForKey:@"subtitle"]] : @""];
         if (thumbs.count) { p.thumbnails = thumbs; p.coverIsOwn = YES; }
         [[TNLibrary shared] renamePlaylist:p to:p.name];   // (saves the author and cover too)
         [[TNMatcher shared] matchTracks:tracks];

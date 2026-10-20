@@ -114,7 +114,7 @@
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     TNTrackCell *cell = [tableView dequeueReusableCellWithIdentifier:@"track" forIndexPath:indexPath];
-    TNTrack *t = [self itemsIn:indexPath.section][(NSUInteger)indexPath.row];
+    TNTrack *t = [[self itemsIn:indexPath.section] objectAtIndex:(NSUInteger)indexPath.row];
     cell.showsArt = YES;
     [cell showTrack:t number:0];
     cell.moreButton.hidden = YES;
@@ -126,7 +126,7 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    TNTrack *t = [self itemsIn:indexPath.section][(NSUInteger)indexPath.row];
+    TNTrack *t = [[self itemsIn:indexPath.section] objectAtIndex:(NSUInteger)indexPath.row];
     BOOL wasPlaying = [[TNPlayer shared] isCurrent:self.track];
     [[TNMatcher shared] setVideoId:t.videoId forTrack:self.track];
     [TNRouter toast:L(@"This version plays from now on")];

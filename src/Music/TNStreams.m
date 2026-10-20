@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNStreams.h"
 #import "TNYTMusic.h"
 #import "TNHTTPRequest.h"
@@ -41,12 +42,12 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
 
 + (void)remember:(NSDictionary *)formats forVideo:(NSString *)videoId
 {
-    NSString *anyURL = TNStr(TNDict(formats[@"140"])[@"url"]) ?: TNStr(TNDict(formats[@"139"])[@"url"]);
+    NSString *anyURL = TNStr([TNDict([formats objectForKey:@"140"]) objectForKey:@"url"]) ?: TNStr([TNDict([formats objectForKey:@"139"]) objectForKey:@"url"]);
     long long expire = [TNQueryValue(anyURL, @"expire") longLongValue];
     NSDate *until = expire > 0 ? [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)expire - 900] : [NSDate dateWithTimeIntervalSinceNow:3600];
     @synchronized (TNStreamCache()) {
         if (TNStreamCache().count > 200) [TNStreamCache() removeAllObjects];
-        TNStreamCache()[videoId] = @{ @"formats": formats, @"until": until };
+        TNLegacyDictionarySet(TNStreamCache(), videoId, @{ @"formats": formats, @"until": until });
     }
 }
 #pragma mark - Straight from YouTube
@@ -59,13 +60,13 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
     NSMutableDictionary *client = [@{ @"clientName": @"VISIONOS", @"clientVersion": TNVisionVersion, @"deviceMake": @"Apple",
                                       @"deviceModel": @"RealityDevice14,1", @"osName": @"visionOS", @"osVersion": @"1.3.21O771",
                                       @"hl": [TNYTMusic language], @"gl": [TNYTMusic region] } mutableCopy];
-    if (visitorData.length) client[@"visitorData"] = visitorData;
+    if (visitorData.length) TNLegacyDictionarySet(client, @"visitorData", visitorData);
     NSDictionary *body = @{ @"videoId": videoId, @"context": @{ @"client": client }, @"contentCheckOk": @YES, @"racyCheckOk": @YES };
     NSMutableDictionary *headers = [@{ @"Content-Type": @"application/json", @"Accept": @"application/json",
                                        @"User-Agent": @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
                                        @"Origin": @"https://www.youtube.com", @"X-YouTube-Client-Name": @"101",
                                        @"X-YouTube-Client-Version": TNVisionVersion } mutableCopy];
-    if (visitorData.length) headers[@"X-Goog-Visitor-Id"] = visitorData;
+    if (visitorData.length) TNLegacyDictionarySet(headers, @"X-Goog-Visitor-Id", visitorData);
     TNHTTPRequest *r = [[TNHTTPRequest alloc] initWithMethod:@"POST" URL:[NSURL URLWithString:TNPlayerURL]];
     r.headers = headers;
     r.body = [TNUtils JSONDataFromObject:body];
@@ -86,29 +87,29 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         if (error) *error = TNMakeError(TNErrorRefused, [NSString stringWithFormat:L(@"YouTube answered with an error (HTTP %ld)."), (long)r.statusCode]);
         return nil;
     }
-    NSDictionary *playability = TNDict(json[@"playabilityStatus"]);
-    NSString *status = TNStr(playability[@"status"]) ?: @"";
+    NSDictionary *playability = TNDict([json objectForKey:@"playabilityStatus"]);
+    NSString *status = TNStr([playability objectForKey:@"status"]) ?: @"";
     if (![status isEqualToString:@"OK"]) {
-        NSString *reason = TNStr(playability[@"reason"]) ?: status;
+        NSString *reason = TNStr([playability objectForKey:@"reason"]) ?: status;
         *refused = [status isEqualToString:@"LOGIN_REQUIRED"] || [[reason lowercaseString] rangeOfString:@"bot"].location != NSNotFound;
         if (error) *error = TNMakeError(*refused ? TNErrorRefused : TNErrorRestricted, reason);
         return nil;
     }
-    NSDictionary *streaming = TNDict(json[@"streamingData"]);
+    NSDictionary *streaming = TNDict([json objectForKey:@"streamingData"]);
     NSMutableDictionary *formats = [NSMutableDictionary dictionary];
-    NSInteger lengthMs = TNInt(TNDict(json[@"videoDetails"])[@"lengthSeconds"]) * 1000;
-    for (id f in TNArr(streaming[@"adaptiveFormats"]) ?: @[]) {
+    NSInteger lengthMs = TNInt([TNDict([json objectForKey:@"videoDetails"]) objectForKey:@"lengthSeconds"]) * 1000;
+    for (id f in TNArr([streaming objectForKey:@"adaptiveFormats"]) ?: @[]) {
         NSDictionary *format = TNDict(f);
-        NSInteger itag = TNInt(format[@"itag"]);
+        NSInteger itag = TNInt([format objectForKey:@"itag"]);
         if (itag != 140 && itag != 139) continue;
-        NSString *url = TNStr(format[@"url"]);
+        NSString *url = TNStr([format objectForKey:@"url"]);
         if (!url.length) continue;   // (a ciphered one: not for this client)
         // (several audio tracks of a dubbed video: the original one)
-        if (TNDict(format[@"audioTrack"]) && !TNBool(TNDict(format[@"audioTrack"])[@"audioIsDefault"])) continue;
-        NSInteger ms = TNInt(format[@"approxDurationMs"]) ?: lengthMs;
-        formats[[NSString stringWithFormat:@"%ld", (long)itag]] = @{ @"url": url, @"ms": @(ms), @"loud": @(TNDbl(format[@"loudnessDb"])) };
+        if (TNDict([format objectForKey:@"audioTrack"]) && !TNBool([TNDict([format objectForKey:@"audioTrack"]) objectForKey:@"audioIsDefault"])) continue;
+        NSInteger ms = TNInt([format objectForKey:@"approxDurationMs"]) ?: lengthMs;
+        TNLegacyDictionarySet(formats, [NSString stringWithFormat:@"%ld", (long)itag], @{ @"url": url, @"ms": @(ms), @"loud": @(TNDbl([format objectForKey:@"loudnessDb"])) });
     }
-    if (formats[@"140"]) return formats;
+    if ([formats objectForKey:@"140"]) return formats;
     // no plain address at all: the API changed for this client
     *refused = YES;
     if (error) *error = TNMakeError(TNErrorRefused, L(@"YouTube offers no sound this player knows for this song."));
@@ -124,8 +125,8 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         return nil;
     }
     NSDictionary *cached;
-    @synchronized (TNStreamCache()) { cached = TNStreamCache()[videoId]; }
-    NSDictionary *formats = cached && [cached[@"until"] timeIntervalSinceNow] > 0 ? cached[@"formats"] : nil;
+    @synchronized (TNStreamCache()) { cached = [TNStreamCache() objectForKey:videoId]; }
+    NSDictionary *formats = cached && [[cached objectForKey:@"until"] timeIntervalSinceNow] > 0 ? [cached objectForKey:@"formats"] : nil;
     if (!formats) {
         // (a stale visitor id is renewed once)
         BOOL refused = NO;
@@ -143,12 +144,12 @@ static NSString *TNQueryValue(NSString *url, NSString *name)
         }
         [self remember:formats forVideo:videoId];
     }
-    NSDictionary *f = (lowQuality ? TNDict(formats[@"139"]) : nil) ?: TNDict(formats[@"140"]);
+    NSDictionary *f = (lowQuality ? TNDict([formats objectForKey:@"139"]) : nil) ?: TNDict([formats objectForKey:@"140"]);
     TNAudioSource *s = [[TNAudioSource alloc] init];
-    s.url = TNStr(f[@"url"]);
-    s.itag = f == formats[@"139"] ? 139 : 140;
-    s.durationMs = TNInt(f[@"ms"]);
-    s.loudnessDb = TNDbl(f[@"loud"]);
+    s.url = TNStr([f objectForKey:@"url"]);
+    s.itag = f == [formats objectForKey:@"139"] ? 139 : 140;
+    s.durationMs = TNInt([f objectForKey:@"ms"]);
+    s.loudnessDb = TNDbl([f objectForKey:@"loud"]);
     TNLog(@"audio of %@: itag %ld, %.0f s, loudness %+.1f dB", videoId, (long)s.itag, s.durationMs / 1000.0, s.loudnessDb);
     return s;
 }

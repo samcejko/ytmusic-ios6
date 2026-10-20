@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNConnectionPool.h"
 #import "TNTLSSocket.h"
 #import "TNCommon.h"
@@ -41,9 +42,9 @@ static const NSUInteger TNMaxIdleTotal = 24;
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     NSMutableArray *emptyKeys = [NSMutableArray array];
     for (NSString *key in _idle) {
-        NSMutableArray *list = _idle[key];
+        NSMutableArray *list = [_idle objectForKey:key];
         for (NSInteger i = (NSInteger)list.count - 1; i >= 0; i--) {
-            TNPooledConnection *c = list[(NSUInteger)i];
+            TNPooledConnection *c = [list objectAtIndex:(NSUInteger)i];
             if (now - c.lastUsed > TNIdleTimeout) {
                 [dead addObject:c.socket];
                 [list removeObjectAtIndex:(NSUInteger)i];
@@ -62,7 +63,7 @@ static const NSUInteger TNMaxIdleTotal = 24;
     TNTLSSocket *result = nil;
     @synchronized (self) {
         [self pruneLocked:dead];
-        NSMutableArray *list = _idle[key];
+        NSMutableArray *list = [_idle objectForKey:key];
         while (list.count && !result) {
             TNPooledConnection *c = [list lastObject];
             [list removeLastObject];
@@ -82,10 +83,10 @@ static const NSUInteger TNMaxIdleTotal = 24;
     NSMutableArray *dead = [NSMutableArray array];
     @synchronized (self) {
         [self pruneLocked:dead];
-        NSMutableArray *list = _idle[key];
+        NSMutableArray *list = [_idle objectForKey:key];
         if (!list) {
             list = [NSMutableArray array];
-            _idle[key] = list;
+            TNLegacyDictionarySet(_idle, key, list);
         }
         if (list.count >= TNMaxIdlePerKey || _count >= TNMaxIdleTotal) {
             [dead addObject:socket];
@@ -105,7 +106,7 @@ static const NSUInteger TNMaxIdleTotal = 24;
     NSMutableArray *dead = [NSMutableArray array];
     @synchronized (self) {
         for (NSString *key in _idle) {
-            for (TNPooledConnection *c in _idle[key]) [dead addObject:c.socket];
+            for (TNPooledConnection *c in [_idle objectForKey:key]) [dead addObject:c.socket];
         }
         [_idle removeAllObjects];
         _count = 0;

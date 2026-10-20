@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNKeychain.h"
 #import "TNCommon.h"
 #import <Security/Security.h>
@@ -16,8 +17,8 @@ static NSString * const TNKeychainService = @"com.samcejko.muzika";
 + (NSString *)stringForKey:(NSString *)key
 {
     NSMutableDictionary *q = [self queryForKey:key];
-    q[(__bridge id)kSecReturnData] = (__bridge id)kCFBooleanTrue;
-    q[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
+    TNLegacyDictionarySet(q, (__bridge id)kSecReturnData, (__bridge id)kCFBooleanTrue);
+    TNLegacyDictionarySet(q, (__bridge id)kSecMatchLimit, (__bridge id)kSecMatchLimitOne);
     CFTypeRef result = NULL;
     if (SecItemCopyMatching((__bridge CFDictionaryRef)q, &result) == errSecSuccess && result) {
         NSData *data = (__bridge_transfer NSData *)result;
@@ -35,8 +36,8 @@ static NSString * const TNKeychainService = @"com.samcejko.muzika";
         [[NSUserDefaults standardUserDefaults] removeObjectForKey:[@"kc." stringByAppendingString:key]];
         return;
     }
-    q[(__bridge id)kSecValueData] = [value dataUsingEncoding:NSUTF8StringEncoding];
-    q[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleAfterFirstUnlock;
+    TNLegacyDictionarySet(q, (__bridge id)kSecValueData, [value dataUsingEncoding:NSUTF8StringEncoding]);
+    TNLegacyDictionarySet(q, (__bridge id)kSecAttrAccessible, (__bridge id)kSecAttrAccessibleAfterFirstUnlock);
     OSStatus status = SecItemAdd((__bridge CFDictionaryRef)q, NULL);
     if (status != errSecSuccess) {
         [[NSUserDefaults standardUserDefaults] setObject:value forKey:[@"kc." stringByAppendingString:key]];

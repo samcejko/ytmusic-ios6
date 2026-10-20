@@ -204,7 +204,7 @@
 
 - (CGFloat)place:(UILabel *)label at:(CGFloat)y width:(CGFloat)width x:(CGFloat)x
 {
-    CGSize s = [label.text ?: @"" sizeWithFont:label.font constrainedToSize:CGSizeMake(width, 600) lineBreakMode:NSLineBreakByWordWrapping];
+    CGSize s = [label.text ?: @"" sizeWithFont:label.font constrainedToSize:CGSizeMake(width, 600) lineBreakMode:UILineBreakModeWordWrap];
     label.frame = CGRectMake(x, y, width, ceilf(s.height));
     return y + ceilf(s.height);
 }

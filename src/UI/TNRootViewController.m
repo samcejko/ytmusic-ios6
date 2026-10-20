@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNRootViewController.h"
 #import "TNSidebarViewController.h"
 #import "TNSettingsViewController.h"
@@ -76,7 +77,7 @@ static __weak TNRootViewController *TNRootShared;
         NSArray *icons = @[ @(TNIconHome), @(TNIconExplore), @(TNIconSearch), @(TNIconLibrary), @(TNIconSettings) ];
         NSMutableArray *items = [NSMutableArray array];
         for (NSUInteger i = 0; i < titles.count; i++) {
-            UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:titles[i] image:[theme icon:(TNIcon)[icons[i] integerValue] size:28] tag:(NSInteger)i];
+            UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:[titles objectAtIndex:i] image:[theme icon:(TNIcon)[[icons objectAtIndex:i] integerValue] size:28] tag:(NSInteger)i];
             [items addObject:item];
         }
         self.tabBar = [[UITabBar alloc] initWithFrame:CGRectZero];
@@ -245,13 +246,13 @@ static __weak TNRootViewController *TNRootShared;
 
 - (UINavigationController *)navFor:(TNSection)section
 {
-    UINavigationController *nav = self.navs[@(section)];
+    UINavigationController *nav = [self.navs objectForKey:@(section)];
     if (!nav) {
         UIViewController *root = [self rootControllerFor:section];
         if (!root) return nil;
         nav = [[UINavigationController alloc] initWithRootViewController:root];
         [[TNTheme shared] applyToNavigationBar:nav.navigationBar];
-        self.navs[@(section)] = nav;
+        TNLegacyDictionarySet(self.navs, @(section), nav);
     }
     return nav;
 }
@@ -291,7 +292,7 @@ static __weak TNRootViewController *TNRootShared;
     [self.sidebar selectSection:section];
     if (self.tabBar) {
         NSUInteger i = [self.tabSections indexOfObject:@(section)];
-        if (i != NSNotFound) self.tabBar.selectedItem = self.tabBar.items[i];
+        if (i != NSNotFound) self.tabBar.selectedItem = [self.tabBar.items objectAtIndex:i];
     }
     if (section == TNSectionSearch && [nav.viewControllers.firstObject isKindOfClass:[TNSearchViewController class]] && nav.viewControllers.count == 1)
         [(TNSearchViewController *)nav.viewControllers.firstObject focusSearchField];
@@ -309,7 +310,7 @@ static __weak TNRootViewController *TNRootShared;
 - (void)tabBar:(UITabBar *)tabBar didSelectItem:(UITabBarItem *)item
 {
     NSUInteger i = (NSUInteger)item.tag;
-    if (i < self.tabSections.count) [self showSection:(TNSection)[self.tabSections[i] integerValue]];
+    if (i < self.tabSections.count) [self showSection:(TNSection)[[self.tabSections objectAtIndex:i] integerValue]];
 }
 
 #pragma mark - Going places
@@ -393,7 +394,7 @@ static __weak TNRootViewController *TNRootShared;
         self.toast.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.92];
         self.toast.textColor = [UIColor whiteColor];
         self.toast.font = [[TNTheme shared] boldBodyFont];
-        self.toast.textAlignment = NSTextAlignmentCenter;
+        self.toast.textAlignment = UITextAlignmentCenter;
         self.toast.numberOfLines = 3;
         self.toast.layer.cornerRadius = 10;
         self.toast.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor;
@@ -436,7 +437,7 @@ static __weak TNRootViewController *TNRootShared;
 
 - (void)playerFailed:(NSNotification *)note
 {
-    NSError *error = note.userInfo[@"error"];
+    NSError *error = [note.userInfo objectForKey:@"error"];
     if (error.localizedDescription.length) [self showToast:error.localizedDescription];
 }
 

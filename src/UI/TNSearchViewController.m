@@ -69,7 +69,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
     CGFloat x = 10;
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
-        [b setTitle:titles[i] forState:UIControlStateNormal];
+        [b setTitle:[titles objectAtIndex:i] forState:UIControlStateNormal];
         b.titleLabel.font = [UIFont fontWithName:@"HelveticaNeue-Bold" size:13] ?: [UIFont boldSystemFontOfSize:13];
         b.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
         b.tag = (NSInteger)i;
@@ -227,7 +227,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
 {
     if (self.mode != TNSearchModeResults) return @[];
     if (self.filter != TNSearchAll) return self.filtered;
-    return [self.shelves[(NSUInteger)section] items] ?: @[];
+    return [[self.shelves objectAtIndex:(NSUInteger)section] items] ?: @[];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
@@ -236,7 +236,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
     if (self.mode == TNSearchModeSuggest) return (NSInteger)self.suggestions.count;
     NSInteger n = (NSInteger)[self itemsIn:section].count;
     if (self.filter != TNSearchAll) return n;
-    TNShelf *shelf = self.shelves[(NSUInteger)section];
+    TNShelf *shelf = [self.shelves objectAtIndex:(NSUInteger)section];
     return shelf.songs ? MIN(n, 8) : MIN(n, 6);
 }
 
@@ -246,7 +246,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
     if (self.mode == TNSearchModeIdle) return TNSectionHeader(L(@"Recent searches"), tableView.bounds.size.width);
     if (self.mode == TNSearchModeSuggest) return nil;
     if (self.filter != TNSearchAll) return nil;
-    return TNSectionHeader([self.shelves[(NSUInteger)section] title], tableView.bounds.size.width);
+    return TNSectionHeader([[self.shelves objectAtIndex:(NSUInteger)section] title], tableView.bounds.size.width);
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section
@@ -257,7 +257,7 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
     if (self.mode != TNSearchModeResults) return 44;
-    id item = [self itemsIn:indexPath.section][(NSUInteger)indexPath.row];
+    id item = [[self itemsIn:indexPath.section] objectAtIndex:(NSUInteger)indexPath.row];
     return [item isKindOfClass:[TNTrack class]] ? 56 : 68;
 }
 
@@ -268,13 +268,13 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"text"] ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"text"];
         [theme styleCell:cell];
         BOOL recent = self.mode == TNSearchModeIdle;
-        cell.textLabel.text = recent ? [TNSettings recentSearches][(NSUInteger)indexPath.row] : self.suggestions[(NSUInteger)indexPath.row];
+        cell.textLabel.text = recent ? [[TNSettings recentSearches] objectAtIndex:(NSUInteger)indexPath.row] : [self.suggestions objectAtIndex:(NSUInteger)indexPath.row];
         cell.textLabel.font = [theme bodyFont];
         cell.imageView.image = [theme icon:recent ? TNIconClock : TNIconSearch size:18 color:[theme secondaryTextColor]];
         return cell;
     }
     NSArray *items = [self itemsIn:indexPath.section];
-    id item = items[(NSUInteger)indexPath.row];
+    id item = [items objectAtIndex:(NSUInteger)indexPath.row];
     if (self.filter != TNSearchAll && indexPath.row >= (NSInteger)items.count - 6) [self loadMoreIfNeeded];
     if ([item isKindOfClass:[TNTrack class]]) {
         TNTrackCell *cell = [tableView dequeueReusableCellWithIdentifier:@"track" forIndexPath:indexPath];
@@ -293,10 +293,10 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (self.mode == TNSearchModeIdle) { [self searchFor:[TNSettings recentSearches][(NSUInteger)indexPath.row]]; [self.searchBar resignFirstResponder]; return; }
-    if (self.mode == TNSearchModeSuggest) { [self searchFor:self.suggestions[(NSUInteger)indexPath.row]]; [self.searchBar resignFirstResponder]; return; }
+    if (self.mode == TNSearchModeIdle) { [self searchFor:[[TNSettings recentSearches] objectAtIndex:(NSUInteger)indexPath.row]]; [self.searchBar resignFirstResponder]; return; }
+    if (self.mode == TNSearchModeSuggest) { [self searchFor:[self.suggestions objectAtIndex:(NSUInteger)indexPath.row]]; [self.searchBar resignFirstResponder]; return; }
     NSArray *items = [self itemsIn:indexPath.section];
-    id item = items[(NSUInteger)indexPath.row];
+    id item = [items objectAtIndex:(NSUInteger)indexPath.row];
     if ([item isKindOfClass:[TNTrack class]]) {
         TNTrack *t = item;
         if ([[TNPlayer shared] isCurrent:t]) { [TNRouter showNowPlaying]; return; }
@@ -310,8 +310,8 @@ typedef NS_ENUM(NSInteger, TNSearchMode) { TNSearchModeIdle, TNSearchModeSuggest
 {
     NSArray *items = [self itemsIn:sender.tag / 10000];
     NSInteger row = sender.tag % 10000;
-    if (row < (NSInteger)items.count && [items[(NSUInteger)row] isKindOfClass:[TNTrack class]])
-        [TNRouter showActionsForTrack:items[(NSUInteger)row] fromView:sender inController:self];
+    if (row < (NSInteger)items.count && [[items objectAtIndex:(NSUInteger)row] isKindOfClass:[TNTrack class]])
+        [TNRouter showActionsForTrack:[items objectAtIndex:(NSUInteger)row] fromView:sender inController:self];
 }
 
 @end

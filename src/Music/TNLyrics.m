@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNLyrics.h"
 #import "TNYTMusic.h"
 #import "TNModels.h"
@@ -25,9 +26,9 @@ static NSString *TNCleanTitle(NSString *title)
     NSMutableString *m = [title ?: @"" mutableCopy];
     for (NSArray *pair in @[ @[ @"(", @")" ], @[ @"[", @"]" ] ]) {
         while (YES) {
-            NSRange open = [m rangeOfString:pair[0]];
+            NSRange open = [m rangeOfString:[pair objectAtIndex:0]];
             if (open.location == NSNotFound || open.location == 0) break;
-            NSRange close = [m rangeOfString:pair[1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
+            NSRange close = [m rangeOfString:[pair objectAtIndex:1] options:0 range:NSMakeRange(open.location, m.length - open.location)];
             NSUInteger end = close.location == NSNotFound ? m.length : close.location + 1;
             [m deleteCharactersInRange:NSMakeRange(open.location, end - open.location)];
         }
@@ -59,15 +60,15 @@ static NSArray *TNParseLRC(NSString *lrc)
             if (close.location == NSNotFound) break;
             NSString *stamp = [line substringWithRange:NSMakeRange(1, close.location - 1)];
             NSArray *parts = [stamp componentsSeparatedByString:@":"];
-            if (parts.count == 2 && [parts[0] length] && [[parts[0] stringByTrimmingCharactersInSet:[NSCharacterSet decimalDigitCharacterSet]] length] == 0) {
-                [times addObject:@((NSInteger)([parts[0] integerValue] * 60000 + [parts[1] doubleValue] * 1000))];
+            if (parts.count == 2 && [[parts objectAtIndex:0] length] && [[[parts objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet decimalDigitCharacterSet]] length] == 0) {
+                [times addObject:@((NSInteger)([[parts objectAtIndex:0] integerValue] * 60000 + [[parts objectAtIndex:1] doubleValue] * 1000))];
             }
             line = [line substringFromIndex:close.location + 1];
         }
         NSString *text = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         for (NSNumber *ms in times) [lines addObject:@{ @"ms": ms, @"text": [TNUtils displayText:text] ?: @"" }];
     }
-    [lines sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [a[@"ms"] compare:b[@"ms"]]; }];
+    [lines sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) { return [[a objectForKey:@"ms"] compare:[b objectForKey:@"ms"]]; }];
     return lines;
 }
 
@@ -100,7 +101,7 @@ static NSArray *TNParseLRC(NSString *lrc)
         NSString *get = [NSString stringWithFormat:@"https://lrclib.net/api/get?track_name=%@&artist_name=%@&duration=%ld",
                          [TNUtils urlEncode:title], [TNUtils urlEncode:artist], (long)lround(ms / 1000.0)];
         NSDictionary *exact = TNDict([self lrclibGet:get failed:failed]);
-        if (TNStr(exact[@"syncedLyrics"]).length) return @[ exact ];
+        if (TNStr([exact objectForKey:@"syncedLyrics"]).length) return @[ exact ];
         if (failed && *failed) return nil;
     }
     NSString *url = [NSString stringWithFormat:@"https://lrclib.net/api/search?track_name=%@&artist_name=%@", [TNUtils urlEncode:title], [TNUtils urlEncode:artist]];
@@ -113,7 +114,7 @@ static NSArray *TNParseLRC(NSString *lrc)
     TNHTTPTask *task = [[TNHTTPTask alloc] init];
     NSString *key = [track key] ?: videoId ?: @"";
     TNLyricsResult *cached;
-    @synchronized (TNLyricsCache()) { cached = TNLyricsCache()[key]; }
+    @synchronized (TNLyricsCache()) { cached = [TNLyricsCache() objectForKey:key]; }
     if (cached) {
         dispatch_async(dispatch_get_main_queue(), ^{ if (!task.isCancelled) completion(cached, nil); });
         return task;
@@ -128,15 +129,15 @@ static NSArray *TNParseLRC(NSString *lrc)
         NSDictionary *best = nil, *plain = nil;
         for (id x in found ?: @[]) {
             NSDictionary *d = TNDict(x);
-            double length = TNDbl(d[@"duration"]);
+            double length = TNDbl([d objectForKey:@"duration"]);
             BOOL fits = !ms || fabs(length - ms / 1000.0) <= 3.0;
             if (!fits) continue;
-            if (TNStr(d[@"syncedLyrics"]).length) { best = d; break; }
-            if (!plain && TNStr(d[@"plainLyrics"]).length) plain = d;
+            if (TNStr([d objectForKey:@"syncedLyrics"]).length) { best = d; break; }
+            if (!plain && TNStr([d objectForKey:@"plainLyrics"]).length) plain = d;
         }
         if (best) {
             result = [[TNLyricsResult alloc] init];
-            result.lines = TNParseLRC(TNStr(best[@"syncedLyrics"]));
+            result.lines = TNParseLRC(TNStr([best objectForKey:@"syncedLyrics"]));
             result.synced = result.lines.count > 0;
             result.source = @"LRCLIB";
         }
@@ -152,11 +153,11 @@ static NSArray *TNParseLRC(NSString *lrc)
                 }];
             });
             dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30 * NSEC_PER_SEC)));
-            if (!text.length && plain) { text = TNStr(plain[@"plainLyrics"]); source = @"LRCLIB"; }
+            if (!text.length && plain) { text = TNStr([plain objectForKey:@"plainLyrics"]); source = @"LRCLIB"; }
             if (text.length) {
                 NSMutableArray *lines = [NSMutableArray array];
                 for (NSString *l in [text componentsSeparatedByString:@"\n"]) [lines addObject:@{ @"ms": @0, @"text": [TNUtils displayText:l] ?: @"" }];
-                while (lines.count && ![lines.lastObject[@"text"] length]) [lines removeLastObject];
+                while (lines.count && ![[lines.lastObject objectForKey:@"text"] length]) [lines removeLastObject];
                 result = [[TNLyricsResult alloc] init];
                 result.lines = lines;
                 result.source = [source stringByReplacingOccurrencesOfString:@"Source: " withString:@""];
@@ -164,7 +165,7 @@ static NSArray *TNParseLRC(NSString *lrc)
         }
         // (YouTube's plain text in place of LRCLIB that did not answer is not kept: next time LRCLIB is asked again)
         if (result && (result.synced || !lrclibFailed)) {
-            @synchronized (TNLyricsCache()) { TNLyricsCache()[key] = result; }
+            @synchronized (TNLyricsCache()) { TNLegacyDictionarySet(TNLyricsCache(), key, result); }
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             if (task.isCancelled) return;

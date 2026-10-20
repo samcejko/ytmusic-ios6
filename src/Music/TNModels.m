@@ -1,3 +1,4 @@
+#import "TNLegacyCollections.h"
 #import "TNModels.h"
 #import "TNCommon.h"
 
@@ -62,13 +63,13 @@ NSString *TNBestThumbnail(NSArray *thumbnails, CGFloat pixels)
     NSInteger bestSide = NSIntegerMax, largestSide = -1;
     for (id t in [thumbnails isKindOfClass:[NSArray class]] ? thumbnails : @[]) {
         NSDictionary *d = TNDict(t);
-        if (!TNStr(d[@"url"]).length) continue;
-        NSInteger side = MAX(TNInt(d[@"width"]), TNInt(d[@"height"]));
+        if (!TNStr([d objectForKey:@"url"]).length) continue;
+        NSInteger side = MAX(TNInt([d objectForKey:@"width"]), TNInt([d objectForKey:@"height"]));
         if (side > largestSide) { largestSide = side; largest = d; }
         if (side >= pixels && side < bestSide) { bestSide = side; best = d; }
     }
     NSDictionary *pick = best ?: largest;
-    return pick ? TNSizedImageURL(TNStr(pick[@"url"]), pixels) : nil;
+    return pick ? TNSizedImageURL(TNStr([pick objectForKey:@"url"]), pixels) : nil;
 }
 
 NSString *TNAppleArtworkURL(NSString *template, CGFloat pixels)
@@ -110,7 +111,7 @@ static void TNPut(NSMutableDictionary *d, NSString *key, id value)
     if (!value) return;
     if ([value isKindOfClass:[NSString class]] && ![value length]) return;
     if ([value isKindOfClass:[NSArray class]] && ![value count]) return;
-    d[key] = value;
+    TNLegacyDictionarySet(d, key, value);
 }
 
 static NSArray *TNArtistsJSON(NSArray *artists)
@@ -157,10 +158,10 @@ static NSString *TNJoinNames(NSArray *artists)
 {
     if (!TNDict(json)) return nil;
     TNArtist *a = [[TNArtist alloc] init];
-    a.browseId = TNStr(json[@"id"]);
-    a.name = TNStr(json[@"name"]);
-    a.thumbnails = TNArr(json[@"thumbs"]);
-    a.subtitle = TNStr(json[@"sub"]);
+    a.browseId = TNStr([json objectForKey:@"id"]);
+    a.name = TNStr([json objectForKey:@"name"]);
+    a.thumbnails = TNArr([json objectForKey:@"thumbs"]);
+    a.subtitle = TNStr([json objectForKey:@"sub"]);
     return a.name.length || a.browseId.length ? a : nil;
 }
 
@@ -190,13 +191,13 @@ static NSString *TNJoinNames(NSArray *artists)
 {
     if (!TNDict(json)) return nil;
     TNAlbum *a = [[TNAlbum alloc] init];
-    a.browseId = TNStr(json[@"id"]);
-    a.playlistId = TNStr(json[@"pl"]);
-    a.name = TNStr(json[@"name"]);
-    a.artists = TNArtistsFromJSON(json[@"artists"]);
-    a.year = TNStr(json[@"year"]);
-    a.kind = TNStr(json[@"kind"]);
-    a.thumbnails = TNArr(json[@"thumbs"]);
+    a.browseId = TNStr([json objectForKey:@"id"]);
+    a.playlistId = TNStr([json objectForKey:@"pl"]);
+    a.name = TNStr([json objectForKey:@"name"]);
+    a.artists = TNArtistsFromJSON([json objectForKey:@"artists"]);
+    a.year = TNStr([json objectForKey:@"year"]);
+    a.kind = TNStr([json objectForKey:@"kind"]);
+    a.thumbnails = TNArr([json objectForKey:@"thumbs"]);
     return a.name.length || a.browseId.length ? a : nil;
 }
 
@@ -245,12 +246,12 @@ static NSString *TNJoinNames(NSArray *artists)
     TNPut(d, @"artists", TNArtistsJSON(self.artists));
     TNPut(d, @"by", self.byline);
     if (self.album) TNPut(d, @"album", [self.album toJSON]);
-    if (self.durationMs) d[@"ms"] = @(self.durationMs);
+    if (self.durationMs) TNLegacyDictionarySet(d, @"ms", @(self.durationMs));
     TNPut(d, @"thumbs", self.thumbnails);
-    if (self.explicitContent) d[@"e"] = @YES;
-    if (self.isVideo) d[@"video"] = @YES;
+    if (self.explicitContent) TNLegacyDictionarySet(d, @"e", @YES);
+    if (self.isVideo) TNLegacyDictionarySet(d, @"video", @YES);
     TNPut(d, @"svid", self.setVideoId);
-    if (self.trackNumber) d[@"n"] = @(self.trackNumber);
+    if (self.trackNumber) TNLegacyDictionarySet(d, @"n", @(self.trackNumber));
     TNPut(d, @"am", self.appleId);
     TNPut(d, @"amc", self.appleCatalogId);
     TNPut(d, @"isrc", self.isrc);
@@ -263,22 +264,22 @@ static NSString *TNJoinNames(NSArray *artists)
 {
     if (!TNDict(json)) return nil;
     TNTrack *t = [[TNTrack alloc] init];
-    t.videoId = TNStr(json[@"v"]);
-    t.name = TNStr(json[@"name"]);
-    t.artists = TNArtistsFromJSON(json[@"artists"]);
-    t.byline = TNStr(json[@"by"]);
-    t.album = [TNAlbum fromJSON:TNDict(json[@"album"])];
-    t.durationMs = TNInt(json[@"ms"]);
-    t.thumbnails = TNArr(json[@"thumbs"]);
-    t.explicitContent = TNBool(json[@"e"]);
-    t.isVideo = TNBool(json[@"video"]);
-    t.setVideoId = TNStr(json[@"svid"]);
-    t.trackNumber = TNInt(json[@"n"]);
-    t.appleId = TNStr(json[@"am"]);
-    t.appleCatalogId = TNStr(json[@"amc"]);
-    t.isrc = TNStr(json[@"isrc"]);
-    t.appleArtwork = TNStr(json[@"art"]);
-    t.spotifyId = TNStr(json[@"sp"]);
+    t.videoId = TNStr([json objectForKey:@"v"]);
+    t.name = TNStr([json objectForKey:@"name"]);
+    t.artists = TNArtistsFromJSON([json objectForKey:@"artists"]);
+    t.byline = TNStr([json objectForKey:@"by"]);
+    t.album = [TNAlbum fromJSON:TNDict([json objectForKey:@"album"])];
+    t.durationMs = TNInt([json objectForKey:@"ms"]);
+    t.thumbnails = TNArr([json objectForKey:@"thumbs"]);
+    t.explicitContent = TNBool([json objectForKey:@"e"]);
+    t.isVideo = TNBool([json objectForKey:@"video"]);
+    t.setVideoId = TNStr([json objectForKey:@"svid"]);
+    t.trackNumber = TNInt([json objectForKey:@"n"]);
+    t.appleId = TNStr([json objectForKey:@"am"]);
+    t.appleCatalogId = TNStr([json objectForKey:@"amc"]);
+    t.isrc = TNStr([json objectForKey:@"isrc"]);
+    t.appleArtwork = TNStr([json objectForKey:@"art"]);
+    t.spotifyId = TNStr([json objectForKey:@"sp"]);
     return t.name.length || t.videoId.length ? t : nil;
 }
 
@@ -316,13 +317,13 @@ static NSString *TNJoinNames(NSArray *artists)
     TNPut(d, @"desc", self.descriptionText);
     TNPut(d, @"thumbs", self.thumbnails);
     TNPut(d, @"info", self.info);
-    d[@"src"] = @(self.source);
-    if (self.trackCount) d[@"count"] = @(self.trackCount);
+    TNLegacyDictionarySet(d, @"src", @(self.source));
+    if (self.trackCount) TNLegacyDictionarySet(d, @"count", @(self.trackCount));
     TNPut(d, @"art", self.appleArtwork);
     TNPut(d, @"sf", self.storefront);
-    if (self.fromLibrary) d[@"lib"] = @YES;
-    if (self.canEdit) d[@"edit"] = @YES;
-    if (self.coverIsOwn) d[@"cover"] = @YES;
+    if (self.fromLibrary) TNLegacyDictionarySet(d, @"lib", @YES);
+    if (self.canEdit) TNLegacyDictionarySet(d, @"edit", @YES);
+    if (self.coverIsOwn) TNLegacyDictionarySet(d, @"cover", @YES);
     TNPut(d, @"mod", self.modified);
     return d;
 }
@@ -331,21 +332,21 @@ static NSString *TNJoinNames(NSArray *artists)
 {
     if (!TNDict(json)) return nil;
     TNPlaylist *p = [[TNPlaylist alloc] init];
-    p.playlistId = TNStr(json[@"id"]);
-    p.browseId = TNStr(json[@"browse"]);
-    p.name = TNStr(json[@"name"]);
-    p.author = TNStr(json[@"author"]);
-    p.descriptionText = TNStr(json[@"desc"]);
-    p.thumbnails = TNArr(json[@"thumbs"]);
-    p.info = TNStr(json[@"info"]);
-    p.source = (TNSource)TNInt(json[@"src"]);
-    p.trackCount = TNInt(json[@"count"]);
-    p.appleArtwork = TNStr(json[@"art"]);
-    p.storefront = TNStr(json[@"sf"]);
-    p.fromLibrary = TNBool(json[@"lib"]);
-    p.canEdit = TNBool(json[@"edit"]);
-    p.coverIsOwn = TNBool(json[@"cover"]);
-    p.modified = TNStr(json[@"mod"]);
+    p.playlistId = TNStr([json objectForKey:@"id"]);
+    p.browseId = TNStr([json objectForKey:@"browse"]);
+    p.name = TNStr([json objectForKey:@"name"]);
+    p.author = TNStr([json objectForKey:@"author"]);
+    p.descriptionText = TNStr([json objectForKey:@"desc"]);
+    p.thumbnails = TNArr([json objectForKey:@"thumbs"]);
+    p.info = TNStr([json objectForKey:@"info"]);
+    p.source = (TNSource)TNInt([json objectForKey:@"src"]);
+    p.trackCount = TNInt([json objectForKey:@"count"]);
+    p.appleArtwork = TNStr([json objectForKey:@"art"]);
+    p.storefront = TNStr([json objectForKey:@"sf"]);
+    p.fromLibrary = TNBool([json objectForKey:@"lib"]);
+    p.canEdit = TNBool([json objectForKey:@"edit"]);
+    p.coverIsOwn = TNBool([json objectForKey:@"cover"]);
+    p.modified = TNStr([json objectForKey:@"mod"]);
     return p.playlistId.length ? p : nil;
 }
 

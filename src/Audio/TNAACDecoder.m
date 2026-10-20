@@ -525,9 +525,9 @@ static inline int16_t TNScale(int16_t v, float gain)
     // the fragment that holds the spot: from the index when there is one, else the first
     uint64_t offset = _dataStart, startFrame = 0;
     for (NSArray *entry in _index) {
-        uint64_t f = [entry[1] unsignedLongLongValue];
+        uint64_t f = [[entry objectAtIndex:1] unsignedLongLongValue];
         if (f > target) break;
-        offset = [entry[0] unsignedLongLongValue];
+        offset = [[entry objectAtIndex:0] unsignedLongLongValue];
         startFrame = f;
     }
     if (![self need:MIN(offset + 65536, (uint64_t)(_file.length ?: offset + 65536)) timeout:20] && _file.available <= offset) return NO;
