@@ -13,5 +13,6 @@
 
 @property (nonatomic) BOOL refreshable;             // pull to refresh (default YES)
 @property (nonatomic, readonly) BOOL loading;
+@property (nonatomic, readonly) BOOL refreshing;
 
 @end

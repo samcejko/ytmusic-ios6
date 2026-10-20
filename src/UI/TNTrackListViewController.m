@@ -489,7 +489,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
             return;
         case TNListApple: {
             NSArray *cached = [[TNLibrary shared] tracksOfPlaylist:self.playlist];
-            if (cached && !self.refreshControl.refreshing) {
+            if (cached && !self.refreshing) {
                 [self setTracksAndMatch:cached];
                 [self finishLoadingWithError:nil empty:!self.tracks.count emptyMessage:L(@"This playlist is empty.")];
                 [self showHeader];
@@ -556,7 +556,7 @@ static const NSUInteger TNMaxPlaylistLength = 3000;
         [self finishLoadingWithError:TNMakeError(TNErrorNotConnected, L(@"Apple Music is not connected.")) empty:!self.tracks.count emptyMessage:nil];
         return;
     }
-    if (!self.refreshControl.refreshing) [self startLoading];
+    [self startLoading];
     NSUInteger generation = ++self.generation;
     __weak TNTrackListViewController *weakSelf = self;
     self.task = [[TNAppleMusic shared] tracksOf:self.playlist completion:^(NSArray *tracks, NSError *error) {

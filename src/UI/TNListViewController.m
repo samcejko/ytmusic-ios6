@@ -3,8 +3,16 @@
 #import "TNPlayer.h"
 #import "TNCommon.h"
 
+// Only instances of the dynamically discovered UIKit class receive these messages.
+@protocol TNRefreshWidget <NSObject>
+- (void)setTintColor:(UIColor *)color;
+- (void)endRefreshing;
+@end
+
 @interface TNListViewController ()
 @property (nonatomic) BOOL loading;
+@property (nonatomic) BOOL refreshing;
+@property (nonatomic, strong) UIControl<TNRefreshWidget> *refreshWidget;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) UILabel *messageLabel;
 @property (nonatomic, strong) UIButton *retryButton;
@@ -40,9 +48,18 @@
     self.retryButton.hidden = YES;
     [self.view addSubview:self.retryButton];
     if (self.refreshable) {
-        self.refreshControl = [[UIRefreshControl alloc] init];
-        self.refreshControl.tintColor = [theme secondaryTextColor];
-        [self.refreshControl addTarget:self action:@selector(reload) forControlEvents:UIControlEventValueChanged];
+        Class refreshClass = NSClassFromString(@"UIRefreshControl");
+        if (refreshClass && [self respondsToSelector:@selector(setRefreshControl:)]) {
+            self.refreshWidget = [[refreshClass alloc] init];
+            [self.refreshWidget setTintColor:[theme secondaryTextColor]];
+            [self.refreshWidget addTarget:self action:@selector(reload) forControlEvents:UIControlEventValueChanged];
+            [self performSelector:@selector(setRefreshControl:) withObject:self.refreshWidget];
+        } else {
+            NSMutableArray *items = [NSMutableArray arrayWithArray:self.navigationItem.rightBarButtonItems ?: @[]];
+            [items addObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
+                                                                       target:self action:@selector(reload)]];
+            self.navigationItem.rightBarButtonItems = items;
+        }
     }
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged) name:TNPlayerDidChangeNotification object:nil];
 }
@@ -73,22 +90,27 @@
 
 - (void)load { [self finishLoadingWithError:nil empty:NO emptyMessage:nil]; }
 
-- (void)reload { [self load]; }
+- (void)reload
+{
+    self.refreshing = YES;
+    [self load];
+}
 
 - (void)startLoading
 {
     self.loading = YES;
     self.messageLabel.hidden = YES;
     self.retryButton.hidden = YES;
-    if (!self.refreshControl.refreshing && [self.tableView numberOfSections] == 0) [self.spinner startAnimating];
-    else if (!self.refreshControl.refreshing && [self tableView:self.tableView numberOfRowsInSection:0] == 0) [self.spinner startAnimating];
+    if (!(self.refreshing && self.refreshWidget) && [self.tableView numberOfSections] == 0) [self.spinner startAnimating];
+    else if (!(self.refreshing && self.refreshWidget) && [self tableView:self.tableView numberOfRowsInSection:0] == 0) [self.spinner startAnimating];
 }
 
 - (void)finishLoadingWithError:(NSError *)error empty:(BOOL)empty emptyMessage:(NSString *)message
 {
     self.loading = NO;
+    self.refreshing = NO;
     [self.spinner stopAnimating];
-    [self.refreshControl endRefreshing];
+    [self.refreshWidget endRefreshing];
     [self.tableView reloadData];
     if (empty || (error && !empty && [self.tableView numberOfSections] == 0)) {
         self.messageLabel.text = error ? error.localizedDescription : message;
