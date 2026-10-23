@@ -18,6 +18,8 @@
 #import "TNAppleMusic.h"
 #import "TNUtils.h"
 #import "TNCommon.h"
+#import "TNSearchViewController.h"
+#import "MusicHandoff.h"
 
 @interface TNActionSheet () <UIActionSheetDelegate>
 @property (nonatomic, strong) UIActionSheet *sheet;
@@ -104,6 +106,49 @@ static __weak TNActionSheet *TNShownSheet;
 @end
 
 @implementation TNRouter
+
+static NSUInteger TNHandoffGeneration;
++ (void)cancelHandoff { TNHandoffGeneration++; }
+
++ (void)playHandoff:(NSDictionary *)metadata
+{
+    NSUInteger generation = ++TNHandoffGeneration;
+    NSString *title = [metadata objectForKey:@"title"], *artist = [metadata objectForKey:@"artist"];
+    NSString *video = MHYouTubeID([metadata objectForKey:@"url"]);
+    if (video.length) {
+        TNTrack *direct = [[TNTrack alloc] init];
+        direct.videoId = video; direct.name = title; direct.byline = artist;
+        [self playSingle:direct]; [self showNowPlaying];
+        return;
+    }
+    if (!title.length || !artist.length) return;
+    TNTrack *track = [[TNTrack alloc] init];
+    track.name = title;
+    track.byline = artist;
+    track.isrc = [metadata objectForKey:@"isrc"];
+    track.durationMs = (NSInteger)(MHDuration([metadata objectForKey:@"duration"]) * 1000);
+    TNTrack *previousTrack = [TNPlayer shared].currentTrack;
+    [self toast:L(@"Finding the recognized song…")];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *error = nil;
+        NSString *found = [[TNMatcher shared] videoIdForTrackSync:track error:&error];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (generation != TNHandoffGeneration || [TNPlayer shared].currentTrack != previousTrack) return;
+            if (found.length) {
+                track.videoId = found;
+                [self playSingle:track];
+                [self showNowPlaying];
+            } else {
+                TNRootViewController *root = [TNRootViewController shared];
+                [root showSection:TNSectionSearch];
+                UIViewController *search = root.contentNavigationController.viewControllers.firstObject;
+                if ([search isKindOfClass:[TNSearchViewController class]]) [(TNSearchViewController *)search searchFor:[NSString stringWithFormat:@"%@ %@", title, artist]];
+                [self toast:error.localizedDescription ?: L(@"No exact match. Choose a search result.")];
+            }
+        });
+    });
+}
+
 
 + (void)promptWithTitle:(NSString *)title message:(NSString *)message text:(NSString *)text placeholder:(NSString *)placeholder
                  button:(NSString *)button completion:(void (^)(NSString *))completion

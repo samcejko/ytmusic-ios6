@@ -23,6 +23,8 @@
 + (void)openRecent;
 + (void)openItem:(id)item;                         // any shelf item: a song plays, the rest opens
 + (BOOL)openURL:(NSString *)url;                   // music.youtube.com, youtube.com, music.apple.com and open.spotify.com links
++ (void)playHandoff:(NSDictionary *)metadata;
++ (void)cancelHandoff;
 + (void)push:(UIViewController *)controller;       // onto the content that is on screen (closing what covers it)
 
 + (void)showActionsForTrack:(TNTrack *)track fromView:(UIView *)view inController:(UIViewController *)controller;

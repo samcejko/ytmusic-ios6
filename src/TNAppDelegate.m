@@ -129,6 +129,7 @@ static BOOL TNPressView(UIView *v, NSString *text)
 // sync, ytm?ep=browse&id=&params= (the answer saved to tmp/ytm.json), rotate?o=landscape|portrait
 - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation
 {
+    [TNRouter cancelHandoff];
     NSString *s = url.absoluteString ?: @"";
     NSString *lower = [s lowercaseString];
     TNRootViewController *root = [TNRootViewController shared];
@@ -140,6 +141,9 @@ static BOOL TNPressView(UIView *v, NSString *text)
     NSRange q = [target rangeOfString:@"?"];
     if (q.location != NSNotFound) { query = [target substringFromIndex:q.location + 1]; target = [target substringToIndex:q.location]; }
     NSDictionary *params = query.length ? [TNUtils parseQuery:query] : @{};
+    if (([target isEqualToString:@"play"] || ([target isEqualToString:@"search"] && [[params objectForKey:@"autoplay"] isEqualToString:@"1"])) && [[params objectForKey:@"title"] length]) {
+        [TNRouter playHandoff:params]; return YES;
+    }
     if ([target isEqualToString:@"open"] && [[params objectForKey:@"url"] length]) { [TNRouter openURL:[params objectForKey:@"url"]]; return YES; }
     if ([target isEqualToString:@"import"] && [[params objectForKey:@"url"] length]) { [TNRouter importLink:[params objectForKey:@"url"]]; return YES; }
     if ([target isEqualToString:@"search"]) {
