@@ -51,7 +51,9 @@
         Class refreshClass = NSClassFromString(@"UIRefreshControl");
         if (refreshClass && [self respondsToSelector:@selector(setRefreshControl:)]) {
             self.refreshWidget = [[refreshClass alloc] init];
-            [self.refreshWidget setTintColor:[theme secondaryTextColor]];
+            if ([self.refreshWidget respondsToSelector:@selector(setTintColor:)]) {
+                [self.refreshWidget performSelector:@selector(setTintColor:) withObject:[theme secondaryTextColor]];
+            }
             [self.refreshWidget addTarget:self action:@selector(reload) forControlEvents:UIControlEventValueChanged];
             [self performSelector:@selector(setRefreshControl:) withObject:self.refreshWidget];
         } else {
